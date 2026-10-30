@@ -25,6 +25,7 @@ IncludeDir["DDSLoader"] = "Source/ThirdParty/DDSLoader"
 IncludeDir["lua"]   = "Source/ThirdParty/lua/src"
 IncludeDir["sol2"]  = "Source/ThirdParty/sol2/include"
 IncludeDir["miniaudio"]  = "Source/ThirdParty/miniaudio"
+IncludeDir["FBX"]        = "Source/ThirdParty/FBX/include"
 
 -- premake의 filter는 project()를 만나면 초기화된다.
 -- 두 프로젝트가 같은 런타임(/MDd vs /MD)으로 컴파일되지 않으면 링크가 실패하므로
@@ -188,6 +189,7 @@ project "HitoriEngine"
 		"%{IncludeDir.miniaudio}",
 		"%{IncludeDir.lua}",
 		"%{IncludeDir.sol2}",
+		"%{IncludeDir.FBX}",
 	}
 
 	links { "Lua" }
@@ -254,6 +256,7 @@ project "HitoriEditor"
 		"%{IncludeDir.json}",
 		"%{IncludeDir.lua}",
 		"%{IncludeDir.sol2}",
+		"%{IncludeDir.FBX}",
 	}
 
 	links
@@ -262,6 +265,8 @@ project "HitoriEditor"
 		"dxgi.lib",
 		"dxguid.lib",
 		"d3dcompiler.lib",
+		"ws2_32.lib",
+		"wininet.lib",
 	}
 
 	filter "configurations:ObjViewer"
@@ -272,6 +277,26 @@ project "HitoriEditor"
 
 	filter "configurations:Benchmark_Debug"
 		targetname "Benchmark_Debug"
+
+	filter "configurations:Debug or configurations:Benchmark_Debug"
+		libdirs { "Source/ThirdParty/FBX/lib/Debug" }
+		links
+		{
+			"libfbxsdk-md.lib",
+			"libxml2-md.lib",
+			"zlib-md.lib",
+			"alembic-md.lib",
+		}
+
+	filter "configurations:Release or configurations:Shipping or configurations:ObjViewer or configurations:Benchmark"
+		libdirs { "Source/ThirdParty/FBX/lib/Release" }
+		links
+		{
+			"libfbxsdk-md.lib",
+			"libxml2-md.lib",
+			"zlib-md.lib",
+			"alembic-md.lib",
+		}
 
 	filter {}
 
@@ -307,6 +332,7 @@ project "HitoriGame"
 		"%{IncludeDir.json}",
 		"%{IncludeDir.lua}",
 		"%{IncludeDir.sol2}",
+		"%{IncludeDir.FBX}",
 	}
 
 	links
@@ -315,7 +341,31 @@ project "HitoriGame"
 		"dxgi.lib",
 		"dxguid.lib",
 		"d3dcompiler.lib",
+		"ws2_32.lib",
+		"wininet.lib",
 	}
+
+	filter "configurations:Debug or configurations:Benchmark_Debug"
+		libdirs { "Source/ThirdParty/FBX/lib/Debug" }
+		links
+		{
+			"libfbxsdk-md.lib",
+			"libxml2-md.lib",
+			"zlib-md.lib",
+			"alembic-md.lib",
+		}
+
+	filter "configurations:Release or configurations:Shipping or configurations:ObjViewer or configurations:Benchmark"
+		libdirs { "Source/ThirdParty/FBX/lib/Release" }
+		links
+		{
+			"libfbxsdk-md.lib",
+			"libxml2-md.lib",
+			"zlib-md.lib",
+			"alembic-md.lib",
+		}
+
+	filter {}
 
 
 -- 셰이더를 VS에서 편집하기 위한 보기 전용 프로젝트 (언리얼의 Shaders와 같은 역할).

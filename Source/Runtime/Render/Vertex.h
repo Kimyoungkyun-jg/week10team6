@@ -33,3 +33,14 @@ struct FParticleVertex
 	FVector Position;
 	FVector2 UV;
 };
+
+struct FSkeletalVertex
+{
+	FVector Position = FVector();
+	FVector Normal = FVector();
+	FVector4 Tangent = FVector4(1.0f, 0.0f, 0.0f, 1.0f);
+	FVector2 UV = FVector2();
+	FVector4 Color = FVector4(1.0f, 1.0f, 1.0f, 1.0f);	// 48
+	int32 BoneIndices[4] = { 0, 0, 0, 0 };				// 64
+	float BoneWeights[4] = { 0.0f, 0.0f, 0.0f, 0.0f };	// 80
+};

@@ -28,20 +28,24 @@ namespace
     {
         int32 CurrentBoneIndex = ParentIndex;
 
-        // 노드의 속성이 eSkeleton인지 확인
-        if (Node->GetNodeAttribute() &&
-            Node->GetNodeAttribute()->GetAttributeType() == fbxsdk::FbxNodeAttribute::eSkeleton)
+        // 노드의 속성이 eSkeleton 또는 eNull(더미/루트 노드)인지 확인
+        if (Node->GetNodeAttribute())
         {
-            FBoneInfo Bone;
-            Bone.Name = Node->GetName();
-            Bone.ParentIndex = ParentIndex;
+            auto AttrType = Node->GetNodeAttribute()->GetAttributeType();
+            if (AttrType == fbxsdk::FbxNodeAttribute::eSkeleton || AttrType == fbxsdk::FbxNodeAttribute::eNull)
+            {
+                FBoneInfo Bone;
+                Bone.Name = Node->GetName();
+                Bone.ParentIndex = ParentIndex;
 
-            // 노드의 로컬 트랜스폼을 행렬로 가져옵니다.
-            fbxsdk::FbxAMatrix LocalMatrix = Node->EvaluateLocalTransform();
-            Bone.LocalBindPose = ConvertFbxMatrix(LocalMatrix);
+                fbxsdk::FbxAMatrix LocalMatrix = Node->EvaluateLocalTransform();
+                Bone.LocalBindPose = ConvertFbxMatrix(LocalMatrix);
+                Bone.GlobalBindPose = ConvertFbxMatrix(Node->EvaluateGlobalTransform());
+                Bone.InverseBindPose = Bone.GlobalBindPose.Inverse();
 
-            Out.Bones.Add(Bone);
-            CurrentBoneIndex = Out.Bones.Num() - 1;
+                Out.Bones.Add(Bone);
+                CurrentBoneIndex = Out.Bones.Num() - 1;
+            }
         }
 
         // 자식 노드들도 순회
@@ -229,6 +233,34 @@ namespace
             for (int i = 0; i < ControlPointCount; ++i)
             {
                 Out.ControlPointWeights[i].NormalizeWeights();
+            }
+
+            // 클러스터가 없는 루트 eNull 노드가 있을 경우 자식의 바인드 포즈로부터 역산
+            for (int32 b = 0; b < Out.Bones.Num(); ++b)
+            {
+                if (Out.Bones[b].ParentIndex != -1)
+                {
+                    int32 p = Out.Bones[b].ParentIndex;
+                    if (Out.Bones[p].GlobalBindPose == FMatrix::Identity && Out.Bones[b].GlobalBindPose != FMatrix::Identity)
+                    {
+                        Out.Bones[p].GlobalBindPose = Out.Bones[b].GlobalBindPose * Out.Bones[b].LocalBindPose.Inverse();
+                        Out.Bones[p].InverseBindPose = Out.Bones[p].GlobalBindPose.Inverse();
+                    }
+                }
+            }
+
+            // 부모-자식 계층에 맞게 LocalBindPose를 GlobalBindPose 기준으로 일치화
+            for (int32 b = 0; b < Out.Bones.Num(); ++b)
+            {
+                if (Out.Bones[b].ParentIndex == -1)
+                {
+                    Out.Bones[b].LocalBindPose = Out.Bones[b].GlobalBindPose;
+                }
+                else
+                {
+                    int32 p = Out.Bones[b].ParentIndex;
+                    Out.Bones[b].LocalBindPose = Out.Bones[b].GlobalBindPose * Out.Bones[p].GlobalBindPose.Inverse();
+                }
             }
 
             // 폴리곤 데이터 읽기
@@ -450,10 +482,6 @@ bool FFbxImporter::Cook(const FFbxInfo& Raw, FSkeletalMeshData& Out)
     {
         for (const FFbxMaterialInfo& MatInfo : Raw.MaterialInfos)
         {
-
-
-
-
             FSkeletalMaterialSlot Slot;
             Slot.Name = MatInfo.Name;
             Slot.BaseColor = MatInfo.BaseColor;
@@ -469,11 +497,6 @@ bool FFbxImporter::Cook(const FFbxInfo& Raw, FSkeletalMeshData& Out)
 
     for (int32 mtlIdx = 0; mtlIdx < MaterialCount; ++mtlIdx)
     {
-        if (Out.MaterialSlots[mtlIdx].DiffuseTexturePath.find("common_face") != std::string::npos)
-        {
-            continue;
-        }
-
         FSkeletalMeshSection Section;
         Section.StartIndex = static_cast<uint32>(Out.Indices.Num());
         Section.MaterialSlotIndex = mtlIdx;
@@ -485,8 +508,8 @@ bool FFbxImporter::Cook(const FFbxInfo& Raw, FSkeletalMeshData& Out)
             int32 PolyMtlIdx = (Poly.MaterialIndex >= 0 && Poly.MaterialIndex < MaterialCount) ? Poly.MaterialIndex : 0;
             if (PolyMtlIdx != mtlIdx) continue;
 
-            const int CornerOrder[3] = { 0, 2, 1 };
-            // 삼각형 3개 꼭짓점을 정점으로 변환
+            const int CornerOrder[3] = { 1, 2, 0 };
+            // 삼각형 3개 꼭짓점을 정점으로 변환 (CW 앞면 정렬)
             for (int i = 0; i < 3; ++i)
             {
                 int corner = CornerOrder[i];
@@ -511,10 +534,10 @@ bool FFbxImporter::Cook(const FFbxInfo& Raw, FSkeletalMeshData& Out)
 
                     // 본 인덱스 & 가중치 매핑
                     const FFbxBoneWeight& BoneWeight = Raw.ControlPointWeights[cpIdx];
-                    for (int i = 0; i < 4; ++i)
+                    for (int k = 0; k < 4; ++k)
                     {
-                        SkinnedVertex.BoneIndices[i] = BoneWeight.BoneIndices[i];
-                        SkinnedVertex.BoneWeights[i] = BoneWeight.BoneWeights[i];
+                        SkinnedVertex.BoneIndices[k] = BoneWeight.BoneIndices[k];
+                        SkinnedVertex.BoneWeights[k] = BoneWeight.BoneWeights[k];
                     }
                 }
 

@@ -33,3 +33,12 @@ UMaterial* USkinnedMeshComponent::GetDefaultMaterial(int32 SlotIndex) const
 {
 	return SkeletalMesh ? SkeletalMesh->GetMaterial(SlotIndex) : nullptr;
 }
+
+FBox USkinnedMeshComponent::CalcLocalBounds() const
+{
+	if (SkeletalMesh)
+	{
+		return SkeletalMesh->GetRenderBounds();
+	}
+	return Super::CalcLocalBounds();
+}

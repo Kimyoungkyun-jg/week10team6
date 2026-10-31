@@ -2,6 +2,8 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Render/RenderCommand.h"
 #include "Render/RenderPacket.h"
+#include "Collision/Ray.h"
+
 
 USkeletalMeshComponent::USkeletalMeshComponent()
 {
@@ -91,6 +93,9 @@ void USkeletalMeshComponent::PerformCPUSkinning()
 	int32 VertexCount = static_cast<int32>(MeshData.SkinnedVertices.Num());
 	SkinnedVertices.SetNum(VertexCount);
 
+	FVector BoundsMin(FLT_MAX, FLT_MAX, FLT_MAX);
+	FVector BoundsMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+
 	for (int32 v = 0; v < VertexCount; ++v)
 	{
 		const FSkeletalVertex& Src = MeshData.SkinnedVertices[v];
@@ -115,7 +120,18 @@ void USkeletalMeshComponent::PerformCPUSkinning()
 		Dst.Tangent = Src.Tangent;
 		Dst.UV = Src.UV;
 		Dst.Color = Src.Color;
+
+		BoundsMin.X = std::min(BoundsMin.X, BlendedPos.X);
+		BoundsMin.Y = std::min(BoundsMin.Y, BlendedPos.Y);
+		BoundsMin.Z = std::min(BoundsMin.Z, BlendedPos.Z);
+		BoundsMax.X = std::max(BoundsMax.X, BlendedPos.X);
+		BoundsMax.Y = std::max(BoundsMax.Y, BlendedPos.Y);
+		BoundsMax.Z = std::max(BoundsMax.Z, BlendedPos.Z);
 	}
+
+	SkeletalMesh->MeshData.AABB.Min = BoundsMin;
+	SkeletalMesh->MeshData.AABB.Max = BoundsMax;
+	SkeletalMesh->RebuildRenderData();
 
 	if (SkeletalMesh->VertexBuffer)
 	{
@@ -147,4 +163,40 @@ void USkeletalMeshComponent::SubmitToRenderQueue(FRenderQueue& RenderQueue, cons
 		Packet.Material = SectionMaterial;
 		RenderQueue.Add(Packet);
 	}
+}
+
+bool USkeletalMeshComponent::LineTraceComponent(const FRay& WorldRay, FHitResult& OutHit)
+{
+	if (!SkeletalMesh) return false;
+	FBox WorldBox = CalcBounds();
+	float BoxT = 0.0f;
+	if (!RayIntersectsAABB(WorldRay, WorldBox.Min, WorldBox.Max, BoxT))
+	{
+		return false;
+	}
+	OutHit.bBlockingHit = true;
+	OutHit.Distance = BoxT;
+	OutHit.ImpactPoint = WorldRay.Origin + WorldRay.Direction * BoxT;
+	OutHit.HitComponent = this;
+	return true;
+}
+
+bool USkeletalMeshComponent::LineTraceComponentLocal(const FRay& LocalRay, float& OutT)
+{
+	if (!SkeletalMesh) return false;
+
+	FBox LocalBox = CalcLocalBounds();
+	float BoxT = 0.0f;
+	if (!RayIntersectsAABB(LocalRay, LocalBox.Min, LocalBox.Max, BoxT))
+	{
+		return false;
+	}
+
+	if (BoxT >= OutT)
+	{
+		return false;
+	}
+
+	OutT = BoxT;
+	return true;
 }

@@ -72,24 +72,46 @@ namespace
 
         for (int polyIdx = 0; polyIdx < PolygonCount; ++polyIdx)
         {
-            FFbxPolygon Polygon; // (FbxInfo에 FFbxPolygon로 선언되어 있는 경우)
+            FFbxPolygon Polygon;
             Polygon.MaterialIndex = 0; // 기본 머티리얼 0번
 
             if (MaterialElement)
             {
+                int localMtlIdx = -1;
                 // eByPolygon 방식인 경우
                 if (MaterialElement->GetMappingMode() == fbxsdk::FbxGeometryElement::eByPolygon)
                 {
                     if (MaterialElement->GetReferenceMode() == fbxsdk::FbxGeometryElement::eIndex ||
                         MaterialElement->GetReferenceMode() == fbxsdk::FbxGeometryElement::eIndexToDirect)
                     {
-                        Polygon.MaterialIndex = MaterialElement->GetIndexArray().GetAt(polyIdx);
+                        localMtlIdx = MaterialElement->GetIndexArray().GetAt(polyIdx);
                     }
                 }
                 // eAllSame 방식인 경우 (전체 메쉬가 단일 머티리얼 사용)
                 else if (MaterialElement->GetMappingMode() == fbxsdk::FbxGeometryElement::eAllSame)
                 {
-                    Polygon.MaterialIndex = MaterialElement->GetIndexArray().GetAt(0);
+                    localMtlIdx = MaterialElement->GetIndexArray().GetAt(0);
+                }
+
+                if (localMtlIdx >= 0)
+                {
+                    fbxsdk::FbxNode* Node = Mesh->GetNode();
+                    if (Node && localMtlIdx < Node->GetMaterialCount())
+                    {
+                        fbxsdk::FbxSurfaceMaterial* FbxMat = Node->GetMaterial(localMtlIdx);
+                        if (FbxMat)
+                        {
+                            FString MatName = FbxMat->GetName();
+                            for (int m = 0; m < Out.MaterialInfos.Num(); ++m)
+                            {
+                                if (Out.MaterialInfos[m].Name == MatName)
+                                {
+                                    Polygon.MaterialIndex = m; // 전역 인덱스로 정확히 매핑!
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -197,7 +219,7 @@ namespace
                     for (int k = 0; k < IndexCount; ++k)
                     {
                         int cpIndex = Indices[k];
-                        float weight = (float)Weights[k];
+                        float weight = static_cast<float>(Weights[k]);
                         Out.ControlPointWeights[cpIndex].AddBoneWeight(BoneIndex, weight);
                     }
                 }
@@ -274,8 +296,17 @@ namespace
             fbxsdk::FbxSurfaceMaterial* FbxMat = Node->GetMaterial(i);
             if (!FbxMat) continue;
 
+            FString MatName = FbxMat->GetName();
+
+            bool bAlreadyExists = false;
+            for (const auto& Exist : Out.MaterialInfos)
+            {
+                if (Exist.Name == MatName) { bAlreadyExists = true; break; }
+            }
+            if (bAlreadyExists) continue;
+
             FFbxMaterialInfo MatInfo;
-            MatInfo.Name = FbxMat->GetName();
+            MatInfo.Name = MatName;
 
             // Diffuse / BaseColor 색상 읽기
             if (FbxMat->GetClassId().Is(fbxsdk::FbxSurfaceLambert::ClassId))
@@ -337,7 +368,7 @@ bool FFbxImporter::ParseFbx(const FString& Path, FFbxInfo& Out)
     Importer->Import(Scene);
     Importer->Destroy(); // 씬에 올렸으면 임포터 객체는 바로 닫아도 됩니다.
 
-    // 크기 단위 변환
+    // 크기 단위 변환, 원본 단위 / 목표 단위로 배율을 구하고 모든 정점의 좌표에 곱해줌, Bone의 이동거리와 애니메이션 키프레임의 위치 값에도 곱해줌
     fbxsdk::FbxSystemUnit SceneUnit = Scene->GetGlobalSettings().GetSystemUnit();
     if (SceneUnit != fbxsdk::FbxSystemUnit::m)
     {
@@ -353,8 +384,10 @@ bool FFbxImporter::ParseFbx(const FString& Path, FFbxInfo& Out)
 
 	// 씬의 좌표계를 엔진 좌표계로 변환
     fbxsdk::FbxAxisSystem SceneAxisSystem = Scene->GetGlobalSettings().GetAxisSystem();
+	// FBX 좌표계와 엔진 좌표계가 다르면 씬 전체를 변환
     if (SceneAxisSystem != EngineAxisSystem)
     {
+        // 기저 변환으로 회전시키고 삼각형 감김 순서를 뒤집어서 겉면이 제대로 보이도록 한다.
         EngineAxisSystem.ConvertScene(Scene);
     }
 
@@ -374,11 +407,11 @@ bool FFbxImporter::ParseFbx(const FString& Path, FFbxInfo& Out)
     // 스켈레톤 정보 추출
     ProcessSkeleton(RootNode, Out);
 
-    // 메시, 정점, 스키닝 가중치 추출
-    ProcessMesh(RootNode, Out);
-
     // 머티리얼 및 텍스처 경로 추출
     ProcessMaterials(RootNode, Out);
+
+    // 메시, 정점, 스키닝 가중치 추출
+    ProcessMesh(RootNode, Out);
 
     Manager->Destroy();
     return true;
@@ -415,8 +448,12 @@ bool FFbxImporter::Cook(const FFbxInfo& Raw, FSkeletalMeshData& Out)
     }
     else
     {
-        for (const auto& MatInfo : Raw.MaterialInfos)
+        for (const FFbxMaterialInfo& MatInfo : Raw.MaterialInfos)
         {
+
+
+
+
             FSkeletalMaterialSlot Slot;
             Slot.Name = MatInfo.Name;
             Slot.BaseColor = MatInfo.BaseColor;
@@ -432,6 +469,11 @@ bool FFbxImporter::Cook(const FFbxInfo& Raw, FSkeletalMeshData& Out)
 
     for (int32 mtlIdx = 0; mtlIdx < MaterialCount; ++mtlIdx)
     {
+        if (Out.MaterialSlots[mtlIdx].DiffuseTexturePath.find("common_face") != std::string::npos)
+        {
+            continue;
+        }
+
         FSkeletalMeshSection Section;
         Section.StartIndex = static_cast<uint32>(Out.Indices.Num());
         Section.MaterialSlotIndex = mtlIdx;
@@ -443,9 +485,11 @@ bool FFbxImporter::Cook(const FFbxInfo& Raw, FSkeletalMeshData& Out)
             int32 PolyMtlIdx = (Poly.MaterialIndex >= 0 && Poly.MaterialIndex < MaterialCount) ? Poly.MaterialIndex : 0;
             if (PolyMtlIdx != mtlIdx) continue;
 
+            const int CornerOrder[3] = { 0, 2, 1 };
             // 삼각형 3개 꼭짓점을 정점으로 변환
-            for (int corner = 0; corner < 3; ++corner)
+            for (int i = 0; i < 3; ++i)
             {
+                int corner = CornerOrder[i];
                 const FFbxCorner& Corner = Poly.Corners[corner];
                 int32 cpIdx = Corner.ControlPointIndex;
 

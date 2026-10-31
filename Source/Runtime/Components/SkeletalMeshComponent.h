@@ -24,6 +24,9 @@ public:
 	void PerformCPUSkinning();
 
 	virtual void SubmitToRenderQueue(FRenderQueue& RenderQueue, const FViewContext& ViewContext) override;
+
+	virtual bool LineTraceComponent(const FRay& WorldRay, FHitResult& OutHit) override;
+	virtual bool LineTraceComponentLocal(const FRay& LocalRay, float& OutT) override;
 private:
 	TArray<FMatrix> LocalBoneTransforms;
 	TArray<FMatrix> GlobalBoneTransforms;

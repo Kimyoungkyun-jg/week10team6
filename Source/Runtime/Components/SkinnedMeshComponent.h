@@ -20,6 +20,7 @@ public:
 	virtual FString GetMaterialSlotName(int32 SlotIndex) const override;
 	virtual UMaterial* GetDefaultMaterial(int32 SlotIndex) const override;
 
+	virtual FBox CalcLocalBounds() const override;
 protected:
 	UPROPERTY(EditAnywhere)
 	USkeletalMesh* SkeletalMesh;

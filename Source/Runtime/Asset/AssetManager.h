@@ -16,6 +16,7 @@ enum class EAssetType
 };
 
 class UStaticMesh;
+class USkeletalMesh;
 class USoundWave;
 
 namespace fs = std::filesystem;
@@ -67,6 +68,7 @@ public:
 	UFont* LoadFontAtlas(const FString& JsonPath, const FString& AtlasTexturePath);
 	USoundWave* LoadSound(const FString& Path);
 	static UStaticMesh* LoadObjStaticMesh(const FString& Path);
+	static USkeletalMesh* LoadFbxSkeletalMesh(const FString& Path);
 
 	FLODGenerateResult GenerateStaticMeshLODs(UStaticMesh& Mesh,const FLODGenerateRequest& Request);
 

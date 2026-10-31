@@ -1,6 +1,7 @@
 #pragma once
 #include "Math/Transform.h"
 #include "Mesh.h"
+#include "SkeletalMesh.h"
 #include "Shader.h"
 #include "Material.h"
 #include <array>
@@ -16,6 +17,7 @@ struct FRenderPacket
 	const FPrimitiveSceneProxy* Proxy = nullptr;
 	const FMatrix* Model = nullptr;
 	UStaticMesh* Mesh = nullptr;
+	USkeletalMesh* SkeletalMesh = nullptr;
 	UMaterial* Material = nullptr;
 	const void* MaterialParamData = nullptr;
 	float CameraToParticleDistance = 0.0f;
@@ -105,8 +107,10 @@ class FRenderQueue : public TArray<FRenderPacket>
 			return (1ull << 63) | (~DistanceBits & 0xFFFFFFFFull);
 		}
 
+		uint16 MeshSortID = Packet.Mesh ? Packet.Mesh->SortID : (Packet.SkeletalMesh ? Packet.SkeletalMesh->SortID : 0);
+
 		return (static_cast<uint64>(Packet.Material->SortID) << 47)
-			| (static_cast<uint64>(Packet.Mesh->SortID) << 31)
+			| (static_cast<uint64>(MeshSortID) << 31)
 			| (static_cast<uint64>(Packet.LODIndex & 0x3) << 29);
 	}
 
@@ -161,7 +165,7 @@ public:
 		for (int32 Index = 0; Index < TotalPackets; ++Index)
 		{
 			const FRenderPacket& Packet = (*this)[Index];
-			if (!Packet.Mesh || !Packet.Material) continue;
+			if ((!Packet.Mesh && !Packet.SkeletalMesh) || !Packet.Material) continue;
 			SortItems.Add({ MakeSortKey(Packet), Index });
 		}
 

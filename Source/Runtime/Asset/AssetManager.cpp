@@ -10,6 +10,7 @@
 #include "Render/RenderResourceManager.h"
 
 #include "Asset/ObjImporter/ObjImporter.h"
+#include "Asset/FbxImporter/FbxImporter.h"
 
 #include "Render/GeometryGenerator.h"
 #include "UObject/UObjectGlobals.h"
@@ -18,6 +19,7 @@
 
 #include "Render/ImageLoader.h"
 #include <cctype>
+
 
 
 namespace
@@ -112,6 +114,83 @@ namespace
 		}
 
 		Mesh->MeshData.BuildTriangleBVH();
+		Mesh->RebuildRenderData();
+
+		return Mesh;
+	}
+
+	USkeletalMesh* CreateSkeletalMesh(const FSkeletalMeshData* MeshData)
+	{
+		if (!MeshData || MeshData->SkinnedVertices.IsEmpty() || MeshData->Indices.IsEmpty())
+			return nullptr;
+
+		uint32 VertexCount = static_cast<uint32>(MeshData->SkinnedVertices.Num());
+
+		// 1. 초기 T-Pose 정점 버퍼 데이터 조립
+		TArray<FVertex> InitialVertices;
+		InitialVertices.SetNum(VertexCount);
+		for (uint32 i = 0; i < VertexCount; ++i)
+		{
+			const FSkeletalVertex& Src = MeshData->SkinnedVertices[i];
+			FVertex& Dst = InitialVertices[i];
+			Dst.Position = Src.Position;
+			Dst.Normal = Src.Normal;
+			Dst.Tangent = Src.Tangent;
+			Dst.UV = Src.UV;
+			Dst.Color = Src.Color;
+		}
+
+		// 2. 엔진 표준 RenderCommand로 버퍼 생성 (버텍스는 CPU 스키닝용 Dynamic, 인덱스는 Static)
+		TUniquePtr<FVertexBuffer> VB = RenderCommand::CreateDynamicVertexBuffer(
+			sizeof(FVertex) * VertexCount, sizeof(FVertex));
+		TUniquePtr<FIndexBuffer> IB = RenderCommand::CreateStaticIndexBuffer(
+			MeshData->Indices.GetData(), static_cast<uint32>(MeshData->Indices.Num()));
+
+		if (!VB || !IB) return nullptr;
+
+		// 초기 T-Pose 데이터 업로드
+		RenderCommand::UpdateBufferData(VB.get(), InitialVertices.GetData(), sizeof(FVertex) * VertexCount);
+
+		// 3. USkeletalMesh 객체 생성
+		USkeletalMesh* Mesh = NewObject<USkeletalMesh>();
+		Mesh->MeshData = *MeshData;
+		Mesh->VertexBuffer = std::move(VB);
+		Mesh->IndexBuffer = std::move(IB);
+
+		// 4. 머티리얼 인스턴스 생성 (CreateStaticMesh와 동일)
+		UMaterial* DefaultMaterial = UAssetManager::GetAssetByPath<UMaterial>("DefaultMaterial");
+		for (const FSkeletalMaterialSlot& Slot : Mesh->MeshData.MaterialSlots)
+		{
+			UMaterial* Material = DefaultMaterial ? UMaterial::CreateInstance(DefaultMaterial) : NewObject<UMaterial>();
+			if (Material)
+			{
+				Material->BaseColor = Slot.BaseColor;
+				if (!Slot.DiffuseTexturePath.empty())
+				{
+					if (UTexture2D* Diffuse = UAssetManager::Get().LoadTexture(Slot.DiffuseTexturePath))
+					{
+						if (Material->Textures.Num() > 0)
+							Material->Textures[0] = Diffuse;
+						else
+							Material->Textures.Add(Diffuse);
+					}
+				}
+
+				if (!Slot.NormalTexturePath.empty())
+				{
+					if (UTexture2D* Normal = UAssetManager::Get().LoadTexture(Slot.NormalTexturePath))
+					{
+						if (Material->Textures.Num() > 1)
+							Material->Textures[1] = Normal;
+						else
+							Material->Textures.Add(Normal);
+					}
+				}
+				Mesh->Materials.Add(Material);
+			}
+		}
+
+		// 5. 바운드 및 프록시 데이터 갱신
 		Mesh->RebuildRenderData();
 
 		return Mesh;
@@ -435,6 +514,25 @@ UStaticMesh* UAssetManager::LoadObjStaticMesh(const FString& Path)
 
 	TUniquePtr<FStaticMeshData> Data = FObjImporter::LoadStaticMeshData(Path);
 	UStaticMesh* Mesh = CreateStaticMesh(Data.get());   // Data가 nullptr이면 nullptr 반환
+	if (!Mesh)
+	{
+		return nullptr;
+	}
+
+	Get().RegisterAsset(Key, Mesh);
+	return Mesh;
+}
+
+USkeletalMesh* UAssetManager::LoadFbxSkeletalMesh(const FString& Path)
+{
+	const FString Key = MakeAssetKey(Path);
+	if (USkeletalMesh* Cached = GetAssetByPath<USkeletalMesh>(Key))
+	{
+		return Cached;
+	}
+
+	TUniquePtr<FSkeletalMeshData> Data = FFbxImporter::LoadSkeletalMeshData(Path);
+	USkeletalMesh* Mesh = CreateSkeletalMesh(Data.get());
 	if (!Mesh)
 	{
 		return nullptr;

@@ -10,6 +10,8 @@
 #include "Tasks/Tasks.h"
 #include "Core/Stats/LightweightStats.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/DecalSceneProxy.h"
+#include "Asset/AssetManager.h"
 #include "Asset/LOD/StaticMeshLODSelector.h"
 #include "Render/SkyLightEnvironment.h"
 #include "Engine/SceneManagement.h"
@@ -18,6 +20,7 @@
 #include "Render/PostProcess/CameraOverlayRenderer.h"
 #include "Render/PostProcess/FXAARenderer.h"
 #include "Render/PostProcess/ToneMapData.h"
+#include "Render/DecalRendering.h"
 #include "Text/TextRenderer.h"
 #include "UObject/UObjectIterator.h"
 
@@ -26,6 +29,7 @@
 #include <atomic>
 #include <cstring>
 #include <utility>
+#include <vector>
 
 DECLARE_CYCLE_STAT("Frustum Cull", STAT_FrustumCull);
 DECLARE_CYCLE_STAT("Gather Elements", STAT_GatherElements);
@@ -497,6 +501,20 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 	}
 	else // Forward Rendering
 	{
+		std::vector<const FDecalSceneProxy*> Decals;
+		if (Options.bDrawPrimitives && Options.bDrawDecal && Options.LightingModel == ELightingModel::Phong)
+		{
+			for (const FDecalSceneProxy* Decal : World->GetScene().GetDecals())
+			{
+				if (!Decal->IsRenderable(View.bGameView)) continue;
+				uint32 PlaneMask = FrustumAllPlanesMask;
+				if (ClassifyBoxInFrustum(Decal->GetBounds(), View.Frustum, PlaneMask) == EFrustumTest::Outside) continue;
+				Decals.push_back(Decal);
+			}
+		}
+		const FRenderGraphTextureRef NormalDecalMask = Decals.empty() ? FRenderGraphTextureRef{} :
+			Graph.CreateTexture(HDRDesc, "ForwardNormalDecalMask");
+		if (!Decals.empty() && !NormalDecalMask) return false;
 		ForwardBatches.Reset();
 		if (Options.bDrawPrimitives)
 		{
@@ -594,6 +612,8 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 		Forward.ColorAttachments = {
 			{ LightingHDR, ERenderGraphLoadAction::Load }
 		};
+		if (NormalDecalMask)
+			Forward.ColorAttachments.push_back({ NormalDecalMask, ERenderGraphLoadAction::Clear, { 0.0f, 0.0f, 0.0f, 0.0f } });
 		Forward.DepthAttachment = { Depth, bUseDepthPrepass ? ERenderGraphLoadAction::Load : ERenderGraphLoadAction::Clear, 1.0f, 0 };
 		if (!Graph.AddRasterPass(std::move(Forward), [this, Renderer, &Graph, LightingOptions = Options, bUseDepthPrepass, ForwardShadowMask]
 		{
@@ -610,6 +630,59 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			Renderer->DrawMeshes(ForwardBatches);
 			UnbindForwardLighting(Renderer);
 		})) return false;
+
+		if (NormalDecalMask)
+		{
+			FRenderGraphRasterPassDesc DecalPass{};
+			DecalPass.Name = "ProjectionDecal";
+			DecalPass.ReadTextures = { Depth, NormalDecalMask };
+			DecalPass.ColorAttachments = { { LightingHDR, ERenderGraphLoadAction::Load } };
+			if (!Graph.AddRasterPass(std::move(DecalPass),
+				[this, Renderer, &Graph, Decals, ForwardShadowMask, Options, Width, Height]
+				{
+					if (!bCorePassSucceeded) return;
+					UStaticMesh* Cube = UAssetManager::GetAssetByPath<UStaticMesh>("Cube");
+					FPipelineState* Pipeline = FRenderResourceManager::GetPSO(EPSOType::ProjectionDecal);
+					if (!Cube || !Cube->GetVertexBuffer(0) || !Cube->GetIndexBuffer(0) ||
+						!Pipeline || !Pipeline->Shader || !Pipeline->Shader->VertexShader ||
+						!Pipeline->Shader->PixelShader || !Renderer->GetDecalViewConstants() || !Renderer->GetDecalParameters())
+					{
+						bCorePassSucceeded = false;
+						return;
+					}
+					if (!BindForwardLighting(Renderer, Options, ForwardShadowMask ? Graph.Resolve(ForwardShadowMask) : nullptr))
+					{
+						bCorePassSucceeded = false;
+						return;
+					}
+					RenderCommand::BindPipelineState(*Pipeline);
+					RenderCommand::BindMesh(Cube);
+					RenderCommand::BindSamplerState(0, ESamplerState::LinearClamp, EShaderBindFlagBits::Pixel);
+					for (const FDecalSceneProxy* Decal : Decals)
+					{
+						FDecalViewConstants ViewConstants{};
+						ViewConstants.DecalWorld = Decal->GetWorldMatrix();
+						ViewConstants.ViewProjection = View.ViewProjectionMatrix;
+						ViewConstants.InverseViewProjection = View.ViewProjectionMatrix.Inverse();
+						ViewConstants.InverseDecalWorld = Decal->GetInverseWorldMatrix();
+						ViewConstants.View = View.ViewMatrix;
+						ViewConstants.ViewportInverseSize = FVector4(1.0f / Width, 1.0f / Height, 0.0f, 0.0f);
+						FDecalParameters Parameters{};
+						Parameters.Color = Decal->GetColor();
+						Parameters.Options = FVector4(Decal->GetOpacity(), Decal->ReceivesLighting() ? 1.0f : 0.0f, 0.0f, 0.0f);
+						Parameters.ShadowFlags = FVector4(Decal->ReceivesShadow() ? 1.0f : 0.0f, ForwardShadowMask ? 1.0f : 0.0f, 0.0f, 0.0f);
+						Parameters.SpecularColorShininess = FVector4(0.04f, 0.04f, 0.04f, 32.0f);
+						RenderCommand::UpdateBufferData(Renderer->GetDecalViewConstants(), &ViewConstants, sizeof(ViewConstants));
+						RenderCommand::UpdateBufferData(Renderer->GetDecalParameters(), &Parameters, sizeof(Parameters));
+						RenderCommand::BindConstantBuffer(0, Renderer->GetDecalViewConstants(), EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
+						RenderCommand::BindConstantBuffer(2, Renderer->GetDecalParameters(), EShaderBindFlagBits::Pixel);
+						RenderCommand::BindShaderResource(2, Decal->GetTexture(), EShaderBindFlagBits::Pixel);
+						RenderCommand::DrawIndexed(Cube->GetIndexBuffer(0)->GetIndexCount());
+					}
+					RenderCommand::UnbindShaderResources(2, 1, EShaderBindFlagBits::Pixel);
+					UnbindForwardLighting(Renderer);
+				})) return false;
+		}
 	}
 
 	FRenderGraphRasterPassDesc ToneMap{};

@@ -69,6 +69,7 @@ public:
 	// 네 View 결과와 ImGui를 메인 Swapchain 백버퍼에 합성한다. Present는 FEngineLoop가 한다.
 	void PresentFrame();
 	void DeleteActor(AActor* Actor);
+	void DuplicateActor(AActor* Actor);
 	void DeleteComponent(UActorComponent* Component);
 
 	//Play 버튼을 눌렀을때 Play Session 실행을 요청한다.

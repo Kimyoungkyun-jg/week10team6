@@ -2,6 +2,39 @@
 #include "Scene.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/SkyLightComponent.h"
+#include "Components/DecalComponent.h"
+
+void FScene::AddDecal(UDecalComponent* Component)
+{
+	if (!Component || Component->SceneProxy) return;
+	Component->SceneProxy = new FDecalSceneProxy(Component);
+	DecalProxies.Add(Component->SceneProxy);
+}
+
+void FScene::RemoveDecal(UDecalComponent* Component)
+{
+	if (!Component || !Component->SceneProxy) return;
+	FDecalSceneProxy* Proxy = Component->SceneProxy;
+	const int32 Index = DecalProxies.Find(Proxy);
+	if (Index != INDEX_NONE) DecalProxies.RemoveAtSwap(Index);
+	Component->SceneProxy = nullptr;
+	delete Proxy;
+}
+
+void FScene::UpdateDecal(UDecalComponent* Component)
+{
+	if (Component && Component->SceneProxy) Component->SceneProxy->Update();
+}
+
+void FScene::RemoveAllDecals()
+{
+	for (FDecalSceneProxy* Proxy : DecalProxies)
+	{
+		if (UDecalComponent* Component = Proxy->GetComponent()) Component->SceneProxy = nullptr;
+		delete Proxy;
+	}
+	DecalProxies.Reset();
+}
 
 void FScene::AddPrimitive(UPrimitiveComponent* Component)
 {

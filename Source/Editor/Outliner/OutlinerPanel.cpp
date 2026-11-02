@@ -30,6 +30,11 @@ void FOutlinerPanel::OnRender()
     // Level의 Actor 목록 Tree 출력
     ImGui::Begin("Outliner");
 
+    ImGui::BeginDisabled(!GetSelectedActor() || World->IsGameWorld());
+    if (ImGui::Button("Duplicate Selected") && DuplicateCallback)
+        DuplicateCallback(GetSelectedActor());
+    ImGui::EndDisabled();
+
     DrawActors(Level);
 
     ImGui::End();

@@ -11,6 +11,7 @@
 #include "Render/PostProcess/ToneMapData.h"
 #include "Render/PostProcess/CameraOverlayRenderer.h"
 #include "Text/TextRenderer.h"
+#include "Render/DecalRendering.h"
 
 namespace
 {
@@ -27,7 +28,9 @@ bool FRenderer::Init()
 	ObjectCB = RenderCommand::CreateConstantBuffer(sizeof(FForwardObjectConstants));
 	ViewCB = RenderCommand::CreateConstantBuffer(sizeof(FMatrix));
 	MaterialCB = RenderCommand::CreateConstantBuffer(sizeof(FForwardMaterialConstants));
-	if (!ObjectCB || !ViewCB || !MaterialCB) return false;
+	DecalViewConstants = RenderCommand::CreateConstantBuffer(sizeof(FDecalViewConstants));
+	DecalParameters = RenderCommand::CreateConstantBuffer(sizeof(FDecalParameters));
+	if (!ObjectCB || !ViewCB || !MaterialCB || !DecalViewConstants || !DecalParameters) return false;
 	GPUOcclusion.Init();
 	return true;
 }

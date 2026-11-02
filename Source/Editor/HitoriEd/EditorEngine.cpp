@@ -29,6 +29,8 @@
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Components/RectLightComponent.h"
+#include "Components/DecalComponent.h"
+#include "Engine/DecalSceneProxy.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/TextRenderComponent.h"
 
@@ -244,6 +246,12 @@ bool UEditorEngine::Init()
 		[this](AActor* Actor)
 		{
 			DeleteActor(Actor);
+		}
+	);
+	OutlinerPanel->SetDuplicateActorCallback(
+		[this](AActor* Actor)
+		{
+			DuplicateActor(Actor);
 		}
 	);
 	DetailsPanel->SetDeleteComponentCallback(
@@ -878,6 +886,8 @@ void UEditorEngine::UpdateGizmoAndPicking()
 	const FVector2 LocalMousePosition = ViewportsPanel->GetLocalMousePosition();
 	ViewClient->UpdateGizmoAndPicking(Gizmo.get(), LocalMousePosition, [this](AActor* SelectedActor) {
 		OutlinerPanel->SelectActor(SelectedActor);
+		}, [this](UDecalComponent* Decal) {
+		DetailsPanel->SelectComponent(Decal);
 		});
 }
 
@@ -890,6 +900,7 @@ void UEditorEngine::BuildSceneRenderOptions(FGameViewportClient* ViewClient, FSc
 
 	Options.bEnableFXAA = SettingsPanel->GetSettings().bEnableFXAA;
 	Options.bCacheShadows = SettingsPanel->GetSettings().bCacheShadows;
+	Options.bDrawDecal = SettingsPanel->GetSettings().bDrawDecal;
 	Options.PcfMode = SettingsPanel->GetSettings().PcfMode;
 	Options.RenderingPath = SettingsPanel->GetSettings().RenderingPath;
 	Options.LightingModel = SettingsPanel->GetSettings().LightingModel;
@@ -914,6 +925,7 @@ void UEditorEngine::BuildSceneRenderOptions(FEditorViewportClient* ViewClient, b
 
 	Options.bEnableFXAA = SettingsPanel->GetSettings().bEnableFXAA;
 	Options.bCacheShadows = SettingsPanel->GetSettings().bCacheShadows;
+	Options.bDrawDecal = SettingsPanel->GetSettings().bDrawDecal;
 	Options.PcfMode = SettingsPanel->GetSettings().PcfMode;
 	Options.RenderingPath = SettingsPanel->GetSettings().RenderingPath;
 	Options.LightingModel = SettingsPanel->GetSettings().LightingModel;
@@ -1173,6 +1185,15 @@ void UEditorEngine::RenderFrame(FEditorViewportClient* ViewClient,
 
 						const AActor* SelectedActor =
 							Gizmo->GetTarget() ? Gizmo->GetTarget()->GetOwner() : nullptr;
+						for (const FDecalSceneProxy* Decal : EditorWorld->GetScene().GetDecals())
+						{
+							if (!Decal->IsShown(false)) continue;
+							const bool bSelected = Gizmo->GetTarget() == Decal->GetComponent();
+							const FVector4 Color = bSelected ? FVector4(1.0f, 0.8f, 0.1f, 1.0f) : FVector4(0.2f, 0.7f, 1.0f, 1.0f);
+							LineBatcher->AddOrientedBox(Decal->GetComponent()->CalcLocalBounds(), Decal->GetWorldMatrix(), Color);
+							LineBatcher->AddLine(Decal->GetWorldMatrix().TransformPosition(FVector()),
+								Decal->GetWorldMatrix().TransformPosition(FVector(0.7f, 0.0f, 0.0f)), Color);
+						}
 
 						DrawCollisionShapes(EditorWorld, LineBatcher.get(), SelectedActor);
 						DrawSpringArms(EditorWorld, LineBatcher.get(), SelectedActor);
@@ -1269,6 +1290,26 @@ void UEditorEngine::DeleteActor(AActor* Actor)
 	DetailsPanel->SelectComponent(nullptr);
 
 	Actor->Destroy();
+}
+
+void UEditorEngine::DuplicateActor(AActor* Actor)
+{
+	if (!Actor || IsPlaying() || Actor->GetWorld() != EditorWorld) return;
+	ULevel* Level = Actor->GetLevel();
+	if (!Level) return;
+
+	FObjectDuplicationParameters Params(Actor, Level);
+	Params.DestName = MakeUniqueObjectName(Level, Actor->GetClass(), FName(Actor->GetName() + "_Copy"));
+	Params.DuplicationSeed.Add(EditorWorld, EditorWorld);
+	Params.DuplicationSeed.Add(Level, Level);
+	AActor* Copy = Cast<AActor>(StaticDuplicateObjectEx(Params));
+	if (!Copy) return;
+
+	Level->AddActor(Copy);
+	Copy->RegisterAllComponents();
+	if (USceneComponent* Root = Copy->GetRootComponent())
+		Root->SetWorldLocation(Copy->GetActorLocation() + FVector(0.0f, 1.0f, 0.0f), false);
+	OutlinerPanel->SelectActor(Copy);
 }
 
 void UEditorEngine::DeleteComponent(UActorComponent* Component)

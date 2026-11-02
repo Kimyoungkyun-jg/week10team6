@@ -91,7 +91,8 @@ public:
 	// 기즈모 조작과 피킹 처리
 	void
 		UpdateGizmoAndPicking(FGizmo* InGizmo, const FVector2& LocalMousePosition,
-			const std::function<void(AActor*)>& OnSelectActor);
+			const std::function<void(AActor*)>& OnSelectActor,
+			const std::function<void(class UDecalComponent*)>& OnSelectDecal);
 
 	// 행렬 계산
 	FMatrix GetViewMatrix() const;

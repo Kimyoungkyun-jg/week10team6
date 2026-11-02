@@ -43,6 +43,7 @@ void FSettingsPanel::OnRender()
 
 	ImGui::TextDisabled("Fill mode is configured per viewport.");
 	ImGui::Checkbox("Draw Primitives", &Settings.bDrawPrimitives);
+	ImGui::Checkbox("Draw Decal", &Settings.bDrawDecal);
 	ImGui::Checkbox("Cache Shadows", &Settings.bCacheShadows);
 	ImGui::Checkbox("Draw Bounding Box", &Settings.bDrawBoundingBox);
 	ImGui::Checkbox("Show Object UUID", &Settings.bShowUUID);
@@ -184,6 +185,7 @@ bool FSettingsPanel::SaveSettings() const
 	File << "[Rendering]\n";
 	File << "Wireframe=" << Settings.bWireframe << "\n";
 	File << "DrawPrimitives=" << Settings.bDrawPrimitives << "\n";
+	File << "DrawDecal=" << Settings.bDrawDecal << "\n";
 	File << "CacheShadows=" << Settings.bCacheShadows << "\n";
 	File << "PcfMode=" << static_cast<uint32_t>(Settings.PcfMode) << "\n";
 	File << "DrawBoundingBox=" << Settings.bDrawBoundingBox << "\n";
@@ -329,6 +331,7 @@ bool FSettingsPanel::LoadSettings()
                 }
                 if (Key == "Wireframe") Settings.bWireframe = std::stoi(ValueStr);
 				else if (Key == "DrawPrimitives") Settings.bDrawPrimitives = std::stoi(ValueStr);
+				else if (Key == "DrawDecal") Settings.bDrawDecal = std::stoi(ValueStr);
 				else if (Key == "CacheShadows") Settings.bCacheShadows = std::stoi(ValueStr);
 				else if (Key == "PcfMode")
 				{

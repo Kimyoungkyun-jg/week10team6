@@ -50,6 +50,8 @@ public:
 	FTextRenderer* GetSceneText() const { return SceneText.get(); }
 
 	FConstantBuffer* GetToneMapConstants() const { return ToneMapConstants.get(); }
+	FConstantBuffer* GetDecalViewConstants() const { return DecalViewConstants.get(); }
+	FConstantBuffer* GetDecalParameters() const { return DecalParameters.get(); }
 	
 private:
 	void EnsurePerObjectSlotCapacity(uint32 SlotCount);
@@ -60,6 +62,8 @@ private:
 	TUniquePtr<FConstantBuffer> MaterialCB;
 	TUniquePtr<FConstantBuffer> PerObjectSlotCB;
 	TUniquePtr<FConstantBuffer> ToneMapConstants;
+	TUniquePtr<FConstantBuffer> DecalViewConstants;
+	TUniquePtr<FConstantBuffer> DecalParameters;
 	uint32 PerObjectSlotCapacity = 0;
 	bool bUsePerObjectSlots = false;
 	TArray<ComPtr<ID3D11Query>> OcclusionQueries;

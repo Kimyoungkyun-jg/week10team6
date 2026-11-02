@@ -31,7 +31,7 @@ struct FForwardObjectConstants
 	FMatrix View;
 	FMatrix Projection;
 	FMatrix NormalMatrix;
-	FVector4 ShadowFlags;
+	FVector4 ShadowFlags; // x: bReceiveShadow, y: bDecalOn
 };
 
 struct FForwardMaterialConstants

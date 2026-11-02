@@ -13,6 +13,7 @@ class USceneComponent;
 
 using SelectionCallback = std::function<void(USceneComponent*)>;
 using DeleteActorCallback = std::function<void(AActor*)>;
+using DuplicateActorCallback = std::function<void(AActor*)>;
 
 class FOutlinerPanel : public IEditorPanel
 {
@@ -22,6 +23,7 @@ public:
 
     void SetSelectionCallback(SelectionCallback InCallback) { Callback = InCallback; }
     void SetDeleteActorCallback(DeleteActorCallback InCallback) { DeleteCallback = InCallback;}
+    void SetDuplicateActorCallback(DuplicateActorCallback InCallback) { DuplicateCallback = InCallback; }
 
 public:
     bool Init() override;
@@ -44,5 +46,6 @@ private:
 
     SelectionCallback Callback;
     DeleteActorCallback DeleteCallback;
+    DuplicateActorCallback DuplicateCallback;
     AActor* PendingDeleteActor = nullptr;
 };

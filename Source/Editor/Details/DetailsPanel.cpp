@@ -5,6 +5,7 @@
 #include "imgui_internal.h"
 #include "Editor/HitoriEd/EditorDragDrop.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/DecalComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/ParticleSubUVComponent.h"
@@ -666,7 +667,10 @@ namespace
 		switch (Property.Type)
 		{
 		case EPropertyType::Float:
-			bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.1f);
+			if (Cast<UDecalComponent>(Object) && Property.Name == "Opacity")
+				bChanged = ImGui::SliderFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.0f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+			else
+				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.1f);
 			break;
 		case EPropertyType::Int:
 			bChanged = ImGui::DragInt(Label.c_str(), static_cast<int*>(ValuePtr), 1.0f);
@@ -778,6 +782,53 @@ namespace
 			else if (Property.Class == UStaticMesh::StaticClass())
 			{
 				DrawMeshSlot(Object, reinterpret_cast<UStaticMesh**>(ObjPtr));
+			}
+			else if (Property.Class == UTexture2D::StaticClass())
+			{
+				UTexture2D** Texture = reinterpret_cast<UTexture2D**>(ObjPtr);
+				const FString CurrentName = *Texture && !(*Texture)->GetPath().empty()
+					? GetAssetDisplayName((*Texture)->GetPath()) : (*Texture ? (*Texture)->GetName() : "None");
+				ImGui::PushID(Property.Name.c_str());
+				if (*Texture && (*Texture)->GetResource() && (*Texture)->GetResource()->GetSRV())
+				{
+					ImGui::Image((ImTextureID)(*Texture)->GetResource()->GetSRV(), { 64.0f, 64.0f });
+					ImGui::SameLine();
+					ImGui::TextUnformatted(CurrentName.c_str());
+				}
+				ImGui::SetNextItemWidth(-1.0f);
+				if (ImGui::BeginCombo("##Texture", CurrentName.c_str()))
+				{
+					if (ImGui::Selectable("None", !*Texture)) { *Texture = nullptr; bChanged = true; }
+					for (TObjectIterator<UTexture2D> It; It; ++It)
+					{
+						UTexture2D* Item = *It;
+						if (!Item || !Item->GetResource() || !Item->GetResource()->GetSRV()) continue;
+						const FString ItemName = Item->GetPath().empty() ? Item->GetName() : GetAssetDisplayName(Item->GetPath());
+						ImGui::PushID(Item);
+						ImGui::Image((ImTextureID)Item->GetResource()->GetSRV(), { 24.0f, 24.0f });
+						ImGui::SameLine();
+						if (ImGui::Selectable(ItemName.c_str(), *Texture == Item, ImGuiSelectableFlags_None, { 0.0f, 24.0f }))
+						{
+							*Texture = Item;
+							bChanged = true;
+						}
+						if (ImGui::IsItemHovered() && !Item->GetPath().empty())
+							ImGui::SetTooltip("%s", Item->GetPath().c_str());
+						if (*Texture == Item) ImGui::SetItemDefaultFocus();
+						ImGui::PopID();
+					}
+					ImGui::EndCombo();
+				}
+				if (ImGui::BeginDragDropTarget())
+				{
+					if (const ImGuiPayload* Payload = ImGui::AcceptDragDropPayload(EditorDragDrop::Texture))
+					{
+						*Texture = *static_cast<UTexture2D**>(Payload->Data);
+						bChanged = true;
+					}
+					ImGui::EndDragDropTarget();
+				}
+				ImGui::PopID();
 			}
 			break;
 		}

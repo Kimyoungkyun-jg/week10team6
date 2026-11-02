@@ -1,6 +1,9 @@
 #include "EnginePCH.h"
 #include "Editor/Viewports/EditorViewportClient.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/DecalComponent.h"
+#include "Engine/DecalSceneProxy.h"
+#include "Collision/Ray.h"
 #include "Editor/Gizmo/Gizmo.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -38,7 +41,8 @@ void FEditorViewportClient::TickInput(float DeltaTime, bool bCaptured,
 // 기즈모 조작 및 액터 피킹 갱신
 void FEditorViewportClient::UpdateGizmoAndPicking(
     FGizmo *InGizmo, const FVector2 &LocalMousePosition,
-    const std::function<void(AActor *)> &OnSelectActor) {
+    const std::function<void(AActor *)> &OnSelectActor,
+    const std::function<void(UDecalComponent *)> &OnSelectDecal) {
   if (!bActive || !InGizmo) {
     return;
   }
@@ -56,7 +60,24 @@ void FEditorViewportClient::UpdateGizmoAndPicking(
   if (FInputSystem::IsMousePressed(EMouseButton::Left) && !InGizmo->IsUsing() &&
       InGizmo->GetHoveredAxis() < 0) {
     FHitResult Hit;
-    if (World && World->LineTraceSingle(Ray, Hit)) {
+    const bool bPrimitiveHit = World && World->LineTraceSingle(Ray, Hit);
+    UDecalComponent* PickedDecal = nullptr;
+    float NearestT = bPrimitiveHit ? Hit.Distance : FLT_MAX;
+    if (World)
+      for (const FDecalSceneProxy* Decal : World->GetScene().GetDecals()) {
+        if (!Decal->IsShown(false) || !Decal->HasValidTransform()) continue;
+        const FMatrix& WorldToLocal = Decal->GetInverseWorldMatrix();
+        const FRay LocalRay{ WorldToLocal.TransformPosition(Ray.Origin), WorldToLocal.TransformVector(Ray.Direction) };
+        float T = NearestT;
+        if (RayIntersectsAABB(LocalRay, FVector(-0.5f, -0.5f, -0.5f), FVector(0.5f, 0.5f, 0.5f), T) && T >= 0.0f && T < NearestT) {
+          NearestT = T;
+          PickedDecal = Decal->GetComponent();
+        }
+      }
+    if (PickedDecal) {
+      if (OnSelectActor) OnSelectActor(PickedDecal->GetOwner());
+      if (OnSelectDecal) OnSelectDecal(PickedDecal);
+    } else if (bPrimitiveHit) {
       if (Hit.HitComponent && Hit.HitComponent->GetOwner()) {
         if (OnSelectActor) {
           OnSelectActor(Hit.HitComponent->GetOwner());

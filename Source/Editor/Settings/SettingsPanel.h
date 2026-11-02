@@ -18,6 +18,7 @@ struct FEditorSettings
 	// Toggles
 	bool bWireframe = false;
 	bool bDrawPrimitives = true;
+	bool bDrawDecal = true;
 	bool bCacheShadows = true; // r.Shadow.CacheWholeSceneShadows
 	EPcfMode PcfMode = EPcfMode::Sample8;
 	bool bDrawBoundingBox = false;

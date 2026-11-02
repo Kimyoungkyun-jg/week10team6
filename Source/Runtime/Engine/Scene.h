@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PrimitiveSceneProxy.h"
+#include "DecalSceneProxy.h"
 #include "LightSceneProxy.h"
 #include "Components/BillboardComponent.h"
 #include "Components/PrimitiveComponent.h"
@@ -17,6 +18,11 @@
 class FScene
 {
 public:
+	void AddDecal(UDecalComponent* Component);
+	void RemoveDecal(UDecalComponent* Component);
+	void UpdateDecal(UDecalComponent* Component);
+	void RemoveAllDecals();
+	const TArray<FDecalSceneProxy*>& GetDecals() const { return DecalProxies; }
 	void AddPrimitive(UPrimitiveComponent* Component);
 	void RemovePrimitive(UPrimitiveComponent* Component);
 	// 모든 프록시를 한 번에 지운다. 액터를 통째로 지우기 전(ClearWorld)에 불러야 지워진 컴포넌트를 가리키는 프록시가 남지 않는다.
@@ -73,6 +79,7 @@ public:
 	TArray<USkyLightComponent*>           SkyLights;               // 프록시 없음
 
 private:
+	TArray<FDecalSceneProxy*> DecalProxies;
 	void RecordShadowInvalidation(const FAABB& Bounds);
 	void InvalidateAllShadows();
 

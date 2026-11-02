@@ -39,6 +39,7 @@ public:
 
 	bool bCastsShadow = true;
 	bool bReceiveShadow = true;
+	bool bDecalOn = true;
 private:
 	friend class FScene;
 	FScene* Scene = nullptr;

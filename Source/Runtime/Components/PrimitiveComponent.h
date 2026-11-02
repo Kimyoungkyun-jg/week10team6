@@ -90,6 +90,8 @@ public:
 	bool bCastShadow = true;
 	UPROPERTY(EditAnywhere)
 	bool bReceiveShadow = true;
+	UPROPERTY(EditAnywhere)
+	bool bDecalOn = true;
 
 	// ---- 충돌 이벤트 (담당: C) ----
 	FComponentOverlapSignature OnComponentBeginOverlap;

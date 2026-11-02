@@ -21,6 +21,7 @@ bool FLineBatcher::Init(FRenderer* InRenderer, UWorld* InWorld)
 
 	PipelineState.Shader = LineShader;
 	PipelineState.Topology = EPrimitiveTopology::LineList;
+	PipelineState.DepthStencilState = EDepthStencilState::ReadOnly;
 
 	MaxVertices = 65536;
 	VertexBufferBase = new FLineBatchVertex[MaxVertices];

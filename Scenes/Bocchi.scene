@@ -58,13 +58,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AStaticMeshActor_1",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -123,13 +128,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AStaticMeshActor_2",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -188,13 +198,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AStaticMeshActor_3",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -253,13 +268,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AStaticMeshActor_4",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -319,13 +339,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "ATextRenderActor_1",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -414,13 +439,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AStaticMeshActor_5",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -483,13 +513,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AParticleActor_1",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -552,13 +587,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AParticleActor_2",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -621,13 +661,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AParticleActor_3",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -690,13 +735,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AParticleActor_4",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -759,13 +809,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AParticleActor_5",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -828,13 +883,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AParticleActor_6",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -897,13 +957,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AParticleActor_7",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -966,13 +1031,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AParticleActor_8",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -1035,13 +1105,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AParticleActor_9",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -1104,13 +1179,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AParticleActor_10",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -1173,13 +1253,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": true,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "AParticleActor_11",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -1220,6 +1305,10 @@
                             "Properties": {
                                 "Intensity": 0.30000001192092896,
                                 "LightColor": 4294967295,
+                                "ShadowBias": 0.5,
+                                "ShadowResolutionScale": 1.0,
+                                "ShadowSharpen": 0.0,
+                                "ShadowSlopeBias": 0.5,
                                 "Transform": {
                                     "Location": {
                                         "X": -5.947237491607666,
@@ -1238,6 +1327,7 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bCastShadows": true,
                                 "bHiddenInGame": false,
                                 "bVisible": true
                             }
@@ -1294,13 +1384,18 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": false,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": true,
+                                "bReceiveShadow": false,
                                 "bVisible": false
                             }
                         }
                     ],
                     "Name": "ASkyLightActor_0",
                     "Properties": {
+                        "ScriptPath": "",
                         "bActorEnableCollision": true
                     }
                 },
@@ -1339,8 +1434,18 @@
                             "Name": "UDirectionalLightComponent",
                             "Parent": "",
                             "Properties": {
+                                "AngularRadiusDegrees": 3.0,
+                                "CascadeDistributionExponent": 3.0,
+                                "CascadeTransitionFraction": 0.10000000149011612,
+                                "DynamicShadowCascades": 4,
+                                "DynamicShadowDistanceMovableLight": 1000.0,
                                 "Intensity": 15.699999809265137,
                                 "LightColor": 4294967295,
+                                "ShadowBias": 0.5,
+                                "ShadowDistanceFadeoutFraction": 0.10000000149011612,
+                                "ShadowResolutionScale": 1.0,
+                                "ShadowSharpen": 0.0,
+                                "ShadowSlopeBias": 0.5,
                                 "Transform": {
                                     "Location": {
                                         "X": 0.0,
@@ -1359,6 +1464,7 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bCastShadows": true,
                                 "bHiddenInGame": false,
                                 "bVisible": true
                             }
@@ -1415,7 +1521,11 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": false,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": true,
+                                "bReceiveShadow": false,
                                 "bVisible": true
                             }
                         },
@@ -1448,13 +1558,89 @@
                                     }
                                 },
                                 "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": false,
+                                "bGenerateOverlapEvents": true,
                                 "bHiddenInGame": false,
+                                "bReceiveShadow": false,
                                 "bVisible": true
                             }
                         }
                     ],
                     "Name": "ADirectionalLightActor_0",
                     "Properties": {
+                        "ScriptPath": "",
+                        "bActorEnableCollision": true
+                    }
+                },
+                {
+                    "Class": "ASkeletalMeshActor",
+                    "Components": [
+                        {
+                            "Class": "USceneComponent",
+                            "Name": "DefaultSceneRoot",
+                            "Parent": "",
+                            "Properties": {
+                                "Transform": {
+                                    "Location": {
+                                        "X": 0.0,
+                                        "Y": 0.0,
+                                        "Z": 0.0
+                                    },
+                                    "Rotation": {
+                                        "Pitch": 0.0,
+                                        "Roll": 0.0,
+                                        "Yaw": 0.0
+                                    },
+                                    "Scale": {
+                                        "X": 1.0,
+                                        "Y": 1.0,
+                                        "Z": 1.0
+                                    }
+                                },
+                                "bAutoActivate": true,
+                                "bHiddenInGame": false,
+                                "bVisible": true
+                            }
+                        },
+                        {
+                            "Class": "USkeletalMeshComponent",
+                            "Name": "SkeletalMeshComponent",
+                            "OverrideMaterials": [],
+                            "Parent": "",
+                            "Properties": {
+                                "SkeletalMesh": "Models/Mint/Mint.fbx",
+                                "Transform": {
+                                    "Location": {
+                                        "X": -1.9891579151153564,
+                                        "Y": 0.0,
+                                        "Z": 0.0
+                                    },
+                                    "Rotation": {
+                                        "Pitch": 0.0,
+                                        "Roll": 0.0,
+                                        "Yaw": -89.62225341796875
+                                    },
+                                    "Scale": {
+                                        "X": 5.0,
+                                        "Y": 5.0,
+                                        "Z": 5.0
+                                    }
+                                },
+                                "bAutoActivate": true,
+                                "bBlockComponent": false,
+                                "bCastShadow": true,
+                                "bGenerateOverlapEvents": true,
+                                "bHiddenInGame": false,
+                                "bReceiveShadow": true,
+                                "bVisible": true
+                            }
+                        }
+                    ],
+                    "Name": "ASkeletalMeshActor_0",
+                    "Properties": {
+                        "ScriptPath": "",
+                        "SkeletalMeshComponent": null,
                         "bActorEnableCollision": true
                     }
                 }

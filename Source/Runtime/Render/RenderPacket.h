@@ -18,6 +18,7 @@ struct FRenderPacket
 	const FMatrix* Model = nullptr;
 	UStaticMesh* Mesh = nullptr;
 	USkeletalMesh* SkeletalMesh = nullptr;
+	FVertexBuffer* SkeletalVertexBuffer = nullptr;
 	UMaterial* Material = nullptr;
 	const void* MaterialParamData = nullptr;
 	float CameraToParticleDistance = 0.0f;

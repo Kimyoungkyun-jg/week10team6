@@ -22,6 +22,8 @@ public:
 	const TArray<FMatrix>& GetBoneTransforms() const { return LocalBoneTransforms; }
 
 	void PerformCPUSkinning();
+	const TArray<FMatrix>& GetGlobalBoneTransforms() const { return GlobalBoneTransforms; }
+	virtual FBox CalcLocalBounds() const override;
 
 	virtual void SubmitToRenderQueue(FRenderQueue& RenderQueue, const FViewContext& ViewContext) override;
 
@@ -32,5 +34,7 @@ private:
 	TArray<FMatrix> GlobalBoneTransforms;
 	TArray<FMatrix> SkinningMatrices;
 	TArray<FVertex> SkinnedVertices;
+	TUniquePtr<FVertexBuffer> SkinnedVertexBuffer;
+	FBox SkinnedBounds;
 	bool bSkinningMatricesDirty = true;
 };

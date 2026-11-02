@@ -320,6 +320,8 @@ bool FMeshPassProcessor::Build(const FSceneView& View, const FRenderQueue& Queue
 		{
 			bBatchBuilt = BuildBatch(Batch, Packet.SkeletalMesh, Packet.Material, Pass, View,
 				LightingModel, Packet.MaterialParamData, Packet.MaterialParamDataSize);
+			if (bBatchBuilt && Packet.SkeletalVertexBuffer)
+				Batch.VertexBuffer = Packet.SkeletalVertexBuffer;
 		}
 		if (!bBatchBuilt) return false;
 

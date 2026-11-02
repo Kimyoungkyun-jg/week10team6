@@ -33,6 +33,12 @@ void USkeletalMeshComponent::SetSkeletalMesh(USkeletalMesh* InSkeletalMesh)
 
 void USkeletalMeshComponent::InitBoneTransforms()
 {
+	SkinnedVertexBuffer.reset();
+	LocalBoneTransforms.Reset();
+	GlobalBoneTransforms.Reset();
+	SkinningMatrices.Reset();
+	SkinnedVertices.Reset();
+	bSkinningMatricesDirty = false;
 	if (!SkeletalMesh) return;
 
 	const TArray<FBoneInfo>& Bones = SkeletalMesh->MeshData.Bones;
@@ -41,6 +47,10 @@ void USkeletalMeshComponent::InitBoneTransforms()
 	LocalBoneTransforms.SetNum(BoneCount);
 	GlobalBoneTransforms.SetNum(BoneCount);
 	SkinningMatrices.SetNum(BoneCount);
+	SkinnedBounds = SkeletalMesh->MeshData.AABB;
+	if (BoneCount == 0) return;
+	SkinnedVertexBuffer = RenderCommand::CreateDynamicVertexBuffer(
+		static_cast<uint32>(SkeletalMesh->MeshData.SkinnedVertices.Num() * sizeof(FVertex)), sizeof(FVertex));
 
 	for (int32 i = 0; i < BoneCount; ++i)
 	{
@@ -103,6 +113,8 @@ void USkeletalMeshComponent::PerformCPUSkinning()
 
 		FVector BlendedPos(0.0f, 0.0f, 0.0f);
 		FVector BlendedNormal(0.0f, 0.0f, 0.0f);
+		FVector BlendedTangent(0.0f, 0.0f, 0.0f);
+		float TotalWeight = 0.0f;
 
 		for (int32 i = 0; i < 4; ++i)
 		{
@@ -113,11 +125,20 @@ void USkeletalMeshComponent::PerformCPUSkinning()
 				const FMatrix& SkinningMatrix = SkinningMatrices[BoneIndex];
 				BlendedPos += SkinningMatrix.TransformPosition(Src.Position) * Weight;
 				BlendedNormal += SkinningMatrix.TransformVector(Src.Normal) * Weight;
+				BlendedTangent += SkinningMatrix.TransformVector(FVector(Src.Tangent.X, Src.Tangent.Y, Src.Tangent.Z)) * Weight;
+				TotalWeight += Weight;
 			}
+		}
+		if (TotalWeight <= 0.0f)
+		{
+			BlendedPos = Src.Position;
+			BlendedNormal = Src.Normal;
+			BlendedTangent = FVector(Src.Tangent.X, Src.Tangent.Y, Src.Tangent.Z);
 		}
 		Dst.Position = BlendedPos;
 		Dst.Normal = BlendedNormal.GetSafeNormal();
-		Dst.Tangent = Src.Tangent;
+		const FVector Tangent = BlendedTangent.GetSafeNormal();
+		Dst.Tangent = FVector4(Tangent.X, Tangent.Y, Tangent.Z, Src.Tangent.W);
 		Dst.UV = Src.UV;
 		Dst.Color = Src.Color;
 
@@ -129,20 +150,25 @@ void USkeletalMeshComponent::PerformCPUSkinning()
 		BoundsMax.Z = std::max(BoundsMax.Z, BlendedPos.Z);
 	}
 
-	SkeletalMesh->MeshData.AABB.Min = BoundsMin;
-	SkeletalMesh->MeshData.AABB.Max = BoundsMax;
-	SkeletalMesh->RebuildRenderData();
+	SkinnedBounds.Min = BoundsMin;
+	SkinnedBounds.Max = BoundsMax;
+	MarkTransformDirty();
 
-	if (SkeletalMesh->VertexBuffer)
+	if (SkinnedVertexBuffer)
 	{
 		RenderCommand::UpdateBufferData(
-			SkeletalMesh->VertexBuffer.get(),
+			SkinnedVertexBuffer.get(),
 			SkinnedVertices.GetData(),
 			VertexCount * sizeof(FVertex)
 		);
 	}
 
 	bSkinningMatricesDirty = false;
+}
+
+FBox USkeletalMeshComponent::CalcLocalBounds() const
+{
+	return SkeletalMesh ? SkinnedBounds : Super::CalcLocalBounds();
 }
 
 void USkeletalMeshComponent::SubmitToRenderQueue(FRenderQueue& RenderQueue, const FViewContext& ViewContext)
@@ -157,6 +183,7 @@ void USkeletalMeshComponent::SubmitToRenderQueue(FRenderQueue& RenderQueue, cons
 
 		FRenderPacket Packet;
 		Packet.SkeletalMesh = SkeletalMesh;
+		Packet.SkeletalVertexBuffer = SkinnedVertexBuffer.get();
 		Packet.Model = RenderQueue.StoreWorldMatrix(GetWorldMatrix());
 		Packet.StartIndex = Section.StartIndex;
 		Packet.IndexCount = Section.IndexCount;

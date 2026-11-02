@@ -29,6 +29,7 @@
 #include "Editor/LevelViewportLayout.h"
 #include "Editor/ContentDrawer/ContentDrawerPanel.h"
 #include "Editor/UIEditor/UIEditorPanel.h"
+#include "Editor/SkeletalRetarget/PoseRetargetPanel.h"
 
 #include "Editor/Rendering/Outline.h"
 #include "Editor/Rendering/OutLineRenderer.h"
@@ -177,6 +178,7 @@ private:
 	FOutlinerPanel* OutlinerPanel = nullptr;
 	FContentDrawerPanel* ContentDrawerPanel = nullptr;
 	FUIEditorPanel* UIEditorPanel = nullptr;
+	FPoseRetargetPanel* PoseRetargetPanel = nullptr;
 
 	UWorld* EditorWorld = nullptr;
 	UWorld* PlayWorld = nullptr;

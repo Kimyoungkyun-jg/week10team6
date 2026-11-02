@@ -173,6 +173,8 @@ bool UEditorEngine::Init()
 	OutputLogPanel->SetEditorSettings(&SettingsPanel->GetMutableSettings());
 
 	UIEditorPanel = EditorUI->AddEditorPanel<FUIEditorPanel>();
+	PoseRetargetPanel = EditorUI->AddEditorPanel<FPoseRetargetPanel>();
+	PoseRetargetPanel->SetOpen(false);
 	ContentDrawerPanel->SetCreateWidgetCallback([this](const FString& Path) { UIEditorPanel->NewAsset(Path); });
 	ContentDrawerPanel->SetOpenWidgetCallback([this](const FString& Path) { UIEditorPanel->OpenAsset(Path); });
 
@@ -678,6 +680,31 @@ void UEditorEngine::RenderViewports()
 	}
 
 	UIEditorPanel->RenderPreview(*UIRenderer);
+	if (PoseRetargetPanel && PoseRetargetPanel->IsOpen())
+	{
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			if (!PoseRetargetPanel->IsViewportVisible(Index)) continue;
+			UWorld* World = PoseRetargetPanel->GetWorld(Index);
+			FEditorViewportClient& Client = PoseRetargetPanel->GetViewport(Index);
+			if (!World || Client.GetWidth() <= 1 || Client.GetHeight() <= 1) continue;
+			World->GetScene().UpdateAllTransforms();
+			FSceneView View = Client.CalcSceneView();
+			FSceneRenderOptions Options;
+			BuildSceneRenderOptions(&Client, false, Options);
+			Options.bDrawPrimitives = true;
+			FSceneRenderer SceneRenderer(World, View, Client.GetRenderData());
+			SceneRenderer.InitViews(Renderer, Options);
+			RenderScene(Client.GetViewTargets(), View, SceneRenderer, World, Options,
+				[this, Index, &View](FSceneOverlayCallbacks& Overlays)
+				{
+					Overlays.EditorGizmo = [this, Index, &View]
+					{
+						PoseRetargetPanel->DrawBones(Index, *LineBatcher, View.ViewProjectionMatrix);
+					};
+				});
+		}
+	}
 }
 
 void UEditorEngine::UpdatePIEViewCamera()
@@ -1256,6 +1283,7 @@ void UEditorEngine::PreExit()
 	EndPlayMap();
 	// 시퀀서는 에디터 월드 액터를 가리키므로 월드보다 먼저 정리한다
 	if (SequencerPanel) SequencerPanel->Shutdown();
+	if (PoseRetargetPanel) PoseRetargetPanel->Release();
 	EditorWorld->ClearWorld();
 	// PIE 창이 열린 채 종료하면 Device가 살아 있을 때 Swapchain과 타깃을 먼저 정리한다.
 	DestroyPIEWindow();

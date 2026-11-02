@@ -1,4 +1,4 @@
-#include "EnginePCH.h"
+﻿#include "EnginePCH.h"
 #include "FbxImporter.h"
 #include <fbxsdk.h>
 #include "Render/SkeletalMeshData.h"
@@ -12,25 +12,21 @@ using namespace fbxsdk;
 
 namespace
 {
-    FMatrix ConvertFbxMatrix(const fbxsdk::FbxAMatrix& FbxMat, bool bFlipHandedness)
+    template <typename TFbxMatrix>
+    FMatrix ConvertFbxMatrix(const TFbxMatrix& FbxMat)
     {
         FMatrix Result;
         for (int row = 0; row < 4; ++row)
         {
             for (int col = 0; col < 4; ++col)
             {
-                float Val = (float)FbxMat.Get(row, col);
-                if (bFlipHandedness && ((row == 1) ^ (col == 1)))
-                {
-                    Val = -Val;
-                }
-                Result.M[row][col] = Val;
+                Result.M[row][col] = (float)FbxMat.Get(row, col);
             }
         }
         return Result;
     }
 
-    void ProcessSkeletonRecursive(fbxsdk::FbxNode* Node, int32 ParentIndex, FFbxInfo& Out, bool bFlipHandedness)
+    void ProcessSkeletonRecursive(fbxsdk::FbxNode* Node, int32 ParentIndex, FFbxInfo& Out)
     {
         int32 CurrentBoneIndex = ParentIndex;
 
@@ -43,10 +39,12 @@ namespace
                 FBoneInfo Bone;
                 Bone.Name = Node->GetName();
                 Bone.ParentIndex = ParentIndex;
+
                 fbxsdk::FbxAMatrix LocalMatrix = Node->EvaluateLocalTransform();
-                Bone.LocalBindPose = ConvertFbxMatrix(LocalMatrix, bFlipHandedness);
-                Bone.GlobalBindPose = ConvertFbxMatrix(Node->EvaluateGlobalTransform(), bFlipHandedness);
+                Bone.LocalBindPose = ConvertFbxMatrix(LocalMatrix);
+                Bone.GlobalBindPose = ConvertFbxMatrix(Node->EvaluateGlobalTransform());
                 Bone.InverseBindPose = Bone.GlobalBindPose.Inverse();
+
                 Out.Bones.Add(Bone);
                 CurrentBoneIndex = Out.Bones.Num() - 1;
             }
@@ -55,20 +53,20 @@ namespace
         // 자식 노드들도 순회
         for (int i = 0; i < Node->GetChildCount(); ++i)
         {
-            ProcessSkeletonRecursive(Node->GetChild(i), CurrentBoneIndex, Out, bFlipHandedness);
+            ProcessSkeletonRecursive(Node->GetChild(i), CurrentBoneIndex, Out);
         }
     }
 
-    void ProcessSkeleton(fbxsdk::FbxNode* RootNode, FFbxInfo& Out, bool bFlipHandedness)
+    void ProcessSkeleton(fbxsdk::FbxNode* RootNode, FFbxInfo& Out)
     {
         // 루트 밑의 자식들부터 탐색 시작
         for (int i = 0; i < RootNode->GetChildCount(); ++i)
         {
-            ProcessSkeletonRecursive(RootNode->GetChild(i), -1, Out, bFlipHandedness);
+            ProcessSkeletonRecursive(RootNode->GetChild(i), -1, Out);
         }
     }
 
-    void ProcessPolygons(fbxsdk::FbxMesh* Mesh, FFbxInfo& Out, bool bFlipHandedness, const fbxsdk::FbxAMatrix& MeshMatrix)
+    void ProcessPolygons(fbxsdk::FbxMesh* Mesh, FFbxInfo& Out, const fbxsdk::FbxAMatrix& MeshMatrix)
     {
         int PolygonCount = Mesh->GetPolygonCount();
         Out.Polygons.Reserve(PolygonCount);
@@ -137,9 +135,7 @@ namespace
                 if (Mesh->GetPolygonVertexNormal(polyIdx, corner, FbxNorm))
                 {
                     fbxsdk::FbxVector4 TransformedNorm = MeshMatrix.MultR(FbxNorm);
-                    float Ny = (float)TransformedNorm[1];
-                    if (bFlipHandedness) Ny = -Ny;
-                    Corner.Normal = FVector((float)TransformedNorm[0], Ny, (float)TransformedNorm[2]);
+                    Corner.Normal = FVector((float)TransformedNorm[0], (float)TransformedNorm[1], (float)TransformedNorm[2]);
                 }
 
                 // UV 추출
@@ -163,7 +159,7 @@ namespace
         }
     }
 
-    void ProcessMesh(fbxsdk::FbxNode* Node, FFbxInfo& Out, bool bFlipHandedness)
+    void ProcessMesh(fbxsdk::FbxNode* Node, FFbxInfo& Out)
     {
         // 재귀적으로 씬에서 eMesh 노드를 찾습니다.
         if (Node->GetNodeAttribute() &&
@@ -188,6 +184,30 @@ namespace
                 MeshMatrix = Node->EvaluateGlobalTransform();
             }
 
+            fbxsdk::FbxPose* BindPose = nullptr;
+            int MeshPoseIndex = -1;
+            if (fbxsdk::FbxScene* Scene = Node->GetScene())
+            {
+                for (int PoseIndex = 0; PoseIndex < Scene->GetPoseCount(); ++PoseIndex)
+                {
+                    fbxsdk::FbxPose* Candidate = Scene->GetPose(PoseIndex);
+                    if (Candidate && Candidate->IsBindPose())
+                    {
+                        const int CandidateMeshIndex = Candidate->Find(Node);
+                        if (CandidateMeshIndex >= 0)
+                        {
+                            BindPose = Candidate;
+                            MeshPoseIndex = CandidateMeshIndex;
+                            break;
+                        }
+                    }
+                }
+            }
+            const FMatrix MeshBindGlobal = BindPose
+                ? ConvertFbxMatrix(BindPose->GetMatrix(MeshPoseIndex))
+                : ConvertFbxMatrix(Node->EvaluateGlobalTransform());
+            const FMatrix MeshBindInverse = MeshBindGlobal.Inverse();
+
             // 원본 정점 위치 읽기
             int ControlPointCount = Mesh->GetControlPointsCount();
             fbxsdk::FbxVector4* ControlPoints = Mesh->GetControlPoints();
@@ -197,13 +217,12 @@ namespace
 
             for (int i = 0; i < ControlPointCount; ++i)
             {
-                fbxsdk::FbxVector4 WorldPos = MeshMatrix.MultT(ControlPoints[i]);
-                float Y = (float)WorldPos[1];
-                if (bFlipHandedness) Y = -Y;
+                // FBX 좌표를 엔진 FVector로 복사
+                fbxsdk::FbxVector4 TransformedPos = MeshMatrix.MultT(ControlPoints[i]);
                 Out.ControlPoints[i] = FVector(
-                    (float)WorldPos[0],
-                    Y,
-                    (float)WorldPos[2]
+                    static_cast<float>(TransformedPos[0]),
+                    static_cast<float>(TransformedPos[1]),
+                    static_cast<float>(TransformedPos[2])
                 );
             }
 
@@ -236,7 +255,7 @@ namespace
                     // 바인드 포즈 행렬 및 역행렬 추출
                     fbxsdk::FbxAMatrix TransformLinkMatrix;
                     Cluster->GetTransformLinkMatrix(TransformLinkMatrix); // 본의 초기 월드 행렬
-                    FMatrix GlobalBindPose = ConvertFbxMatrix(TransformLinkMatrix, bFlipHandedness);
+                    FMatrix GlobalBindPose = ConvertFbxMatrix(TransformLinkMatrix);
                     Out.Bones[BoneIndex].GlobalBindPose = GlobalBindPose;
                     Out.Bones[BoneIndex].InverseBindPose = GlobalBindPose.Inverse();
 
@@ -258,6 +277,30 @@ namespace
             for (int i = 0; i < ControlPointCount; ++i)
             {
                 Out.ControlPointWeights[i].NormalizeWeights();
+            }
+
+            // 정점은 mesh 로컬 공간이므로 bone의 bind pose도 같은 공간으로 맞춘다.
+            if (BindPose)
+            {
+                for (int PoseIndex = 0; PoseIndex < BindPose->GetCount(); ++PoseIndex)
+                {
+                    fbxsdk::FbxNode* PoseNode = BindPose->GetNode(PoseIndex);
+                    if (!PoseNode || PoseNode == Node) continue;
+                    for (int32 BoneIndex = 0; BoneIndex < Out.Bones.Num(); ++BoneIndex)
+                    {
+                        if (Out.Bones[BoneIndex].Name == PoseNode->GetName())
+                        {
+                            Out.Bones[BoneIndex].GlobalBindPose = ConvertFbxMatrix(BindPose->GetMatrix(PoseIndex));
+                            break;
+                        }
+                    }
+                }
+            }
+            // ?뺤젏??MeshMatrix濡?蹂?섎릺????怨듦컙(+X Forward, +Y Right, +Z Up)???뺣젹?섏뿀?쇰?濡? 蹂???떆 ??怨듦컙 洹몃?濡?留ㅼ묶
+            // (MeshBindInverse瑜?怨깊븯硫?硫붿돩? 蹂몄씠 ?ㅼ떆 釉붾젋??濡쒖뺄 怨듦컙?쇰줈 ??쉶?꾨릺??踰꾨┝)
+            for (FBoneInfo& Bone : Out.Bones)
+            {
+                Bone.InverseBindPose = Bone.GlobalBindPose.Inverse();
             }
 
             // 클러스터가 없는 루트 eNull 노드가 있을 경우 자식의 바인드 포즈로부터 역산
@@ -289,13 +332,13 @@ namespace
             }
 
             // 폴리곤 데이터 읽기
-            ProcessPolygons(Mesh, Out, bFlipHandedness, MeshMatrix);
+            ProcessPolygons(Mesh, Out, MeshMatrix);
             return; // 일단 첫 번째 메쉬 처리 후 종료
         }
 
         for (int i = 0; i < Node->GetChildCount(); ++i)
         {
-            ProcessMesh(Node->GetChild(i), Out, bFlipHandedness);
+            ProcessMesh(Node->GetChild(i), Out);
         }
     }
 
@@ -436,12 +479,11 @@ bool FFbxImporter::ParseFbx(const FString& Path, FFbxInfo& Out)
     fbxsdk::FbxAxisSystem EngineAxisSystem(
         fbxsdk::FbxAxisSystem::eZAxis,
         fbxsdk::FbxAxisSystem::eParityEven,
-        fbxsdk::FbxAxisSystem::eRightHanded
+        fbxsdk::FbxAxisSystem::eLeftHanded
     );
 
 	// 씬의 좌표계를 엔진 좌표계로 변환
     fbxsdk::FbxAxisSystem SceneAxisSystem = Scene->GetGlobalSettings().GetAxisSystem();
-    bool bFlipHandedness = (SceneAxisSystem.GetCoorSystem() == fbxsdk::FbxAxisSystem::eRightHanded);
 	// FBX 좌표계와 엔진 좌표계가 다르면 씬 전체를 변환
     if (SceneAxisSystem != EngineAxisSystem)
     {
@@ -463,13 +505,13 @@ bool FFbxImporter::ParseFbx(const FString& Path, FFbxInfo& Out)
     Out.Path = Path;
 
     // 스켈레톤 정보 추출
-    ProcessSkeleton(RootNode, Out, bFlipHandedness);
+    ProcessSkeleton(RootNode, Out);
 
     // 머티리얼 및 텍스처 경로 추출
     ProcessMaterials(RootNode, Out);
 
     // 메시, 정점, 스키닝 가중치 추출
-    ProcessMesh(RootNode, Out, bFlipHandedness);
+    ProcessMesh(RootNode, Out);
 
     Manager->Destroy();
     return true;

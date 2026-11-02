@@ -32,13 +32,13 @@ public:
 		TargetTransform = nullptr;
 		OnTransformChanged = nullptr;
 	}
-	void SetTarget(FTransform* InTransform, std::function<void(const FTransform&)> InOnChanged = nullptr)
+	/*void SetTarget(FTransform* InTransform, std::function<void(const FTransform&)> InOnChanged = nullptr)
 	{
 		Target = nullptr;
 		TargetTransform = InTransform;
 		OnTransformChanged = InOnChanged;
 		bUseActorBounds = false;
-	}
+	}*/
 	bool HasTarget() const { return Target != nullptr || TargetTransform != nullptr; }
 	USceneComponent* GetTarget() const { return Target; }
 

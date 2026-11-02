@@ -6,6 +6,7 @@
 #include "Render/RenderCommand.h"
 #include "Render/RenderResourceManager.h"
 #include "Render/SceneView.h"
+#include "Render/Decal/DecalStats.h"
 
 
 bool FProjectedDecalRenderer::Init(FRenderer* InRenderer)
@@ -89,7 +90,8 @@ bool FProjectedDecalRenderer::IsReady() const
 bool FProjectedDecalRenderer::OnRenderMesh(
 	std::span<const FMeshDrawBatch> ReceiverBatches,
 	std::span<const FProjectedDecalRenderData> Decals,
-	bool bUnlitPass)
+	bool bUnlitPass,
+	FDecalFrameStats* Stats)
 {
 	// 그릴 것이 없는 것은 정상적인 성공으로 취급한다.
 	if (Decals.empty() ||
@@ -102,6 +104,8 @@ bool FProjectedDecalRenderer::OnRenderMesh(
 	{
 		return false;
 	}
+
+	bool bSubmitted = false;
 
 	// 바인딩 전에 필요한 셰이더를 확인한다.
 	for (const FMeshDrawBatch& Batch : ReceiverBatches)
@@ -180,12 +184,32 @@ bool FProjectedDecalRenderer::OnRenderMesh(
 			Batch.Sampler = Decal.Sampler;
 			Batch.SamplerStages = EShaderBindFlagBits::Pixel;
 
+
+			if (Stats)
+			{
+				for (const FMeshDrawBatch::FItem& Item : Batch.Items)
+				{
+					++Stats->DrawCalls;
+					Stats->SubmittedTriangles += Item.IndexCount / 3;
+				}
+			}
 			// 원본 MaterialData는 유지한다.
 			// 재사용하는 VS의 UVTransform 등도 기존 값으로 바인딩한다.
 			Renderer->DrawMeshes(
 				std::span<const FMeshDrawBatch>(&Batch, 1));
+
+			bSubmitted = true;
+		}
+
+		if (Stats && bSubmitted)
+		{
+			if (bUnlitPass)
+				++Stats->SubmittedUnlit;
+			else
+				++Stats->SubmittedLit;
 		}
 	}
+
 
 	RenderCommand::BindConstantBuffer(
 		4,
@@ -205,7 +229,8 @@ bool FProjectedDecalRenderer::OnRenderDepth(
 	uint32 Width,
 	uint32 Height,
 	std::span<const FProjectedDecalRenderData> Decals,
-	bool bUnlitPass)
+	bool bUnlitPass,
+	FDecalFrameStats* Stats)
 {
 	if (Decals.empty())
 		return true;
@@ -223,7 +248,7 @@ bool FProjectedDecalRenderer::OnRenderDepth(
 		static_cast<float>(Height),
 		1.0f / static_cast<float>(Width),
 		1.0f / static_cast<float>(Height));
-	
+
 	RenderCommand::UpdateBufferData(
 		DepthViewConstantBuffer.get(),
 		&ViewConstants,
@@ -264,30 +289,41 @@ bool FProjectedDecalRenderer::OnRenderDepth(
 			ConstantBuffer.get(),
 			&Constants,
 			sizeof(Constants));
-		
+
 		RenderCommand::BindShaderResource(
 			0,
 			Decal.ColorTexture,
 			EShaderBindFlagBits::Pixel);
-		
+
 		RenderCommand::BindSamplerState(
 			0,
 			Decal.Sampler,
 			EShaderBindFlagBits::Pixel);
-		
+
 		RenderCommand::Draw(3);
+
+		if (Stats)
+		{
+			++Stats->DrawCalls;
+			++Stats->SubmittedTriangles;
+
+			if (bUnlitPass)
+				++Stats->SubmittedUnlit;
+			else
+				++Stats->SubmittedLit;
+		}
 	}
 
 	RenderCommand::BindConstantBuffer(
 		4,
 		nullptr,
 		EShaderBindFlagBits::Pixel);
-	
+
 	RenderCommand::BindConstantBuffer(
 		5,
 		nullptr,
 		EShaderBindFlagBits::Pixel);
-	
+
 	// t0: 데칼 텍스처
 	// t1: RenderGraph가 바인딩한 SceneDepth
 	RenderCommand::UnbindShaderResources(

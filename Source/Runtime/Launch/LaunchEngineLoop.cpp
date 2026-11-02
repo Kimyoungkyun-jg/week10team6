@@ -17,6 +17,8 @@
 #include "Core/SplashScreen.h"
 #include "Core/Stats/LightweightStats.h"
 #include "Core/Async/TaskPool.h"
+#include "Core/StatOverlay.h"
+#include "Render/GpuProfiler.h"
 
 #include "UObject/UObjectGlobals.h"
 
@@ -146,11 +148,16 @@ bool FEngineLoop::Tick()
 		return true;
 	}
 
+	FGpuProfiler& GpuProfiler = FGpuProfiler::Get();
+	GpuProfiler.BeginFrame(
+		FStatOverlay::IsEnabled(EStatFlags::Decal));
+
 	{
 		SCOPE_CYCLE_COUNTER(STAT_EngineTick);
 		GEngine->Tick(EngineTimer::GetDeltaTime());
 		GEngine->FlushPendingDestruction();
 	}
+	GpuProfiler.EndFrame();
 	{
 		SCOPE_CYCLE_COUNTER(STAT_Present);
 		Swapchain->SwapBuffers(Config.SyncInterval);
@@ -168,7 +175,7 @@ bool FEngineLoop::Tick()
 void FEngineLoop::Exit()
 {
 	FTaskPool::Get().Shutdown();
-
+	FGpuProfiler::Get().Shutdown();
 
 	if (GEngine)
 	{

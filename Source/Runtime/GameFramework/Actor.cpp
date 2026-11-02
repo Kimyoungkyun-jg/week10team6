@@ -36,11 +36,17 @@ AActor::~AActor()
 
 void AActor::BeginPlay()
 {
-	if (bHasBegunPlay || !World || !World->HasBegunPlay()) return;
+	if (bActorIsBeingDestroyed || bHasBegunPlay || bHasEndedPlay || !World || !World->HasBegunPlay()) return;
 	RegisterAllComponents();
+	if (bActorIsBeingDestroyed) return;
 	bHasBegunPlay = true;
-	for (UActorComponent* Component : Components)
-		if (Component) Component->BeginPlayComponent();
+	const TArray<UActorComponent*> BeginningComponents = Components;
+	for (UActorComponent* Component : BeginningComponents)
+	{
+		if (bActorIsBeingDestroyed) return;
+		if (Components.Find(Component) != INDEX_NONE && IsValid(Component)) Component->BeginPlayComponent();
+	}
+	if (bActorIsBeingDestroyed) return;
 
 	if (!ScriptPath.empty())
 	{
@@ -49,25 +55,34 @@ void AActor::BeginPlay()
 		PrimaryActorTick.bCanEverTick = true;
 	}
 
+	if (bActorIsBeingDestroyed) return;
 	RegisterAllActorTickFunctions(true);
 
-	if (Script)
+	if (Script && !bActorIsBeingDestroyed)
 		Script->Call("BeginPlay");
 }
 
 void AActor::TickActor(float DeltaTime)
 {
+	if (bActorIsBeingDestroyed) return;
 	Tick(DeltaTime);
-	if (Script)
+	if (Script && !bActorIsBeingDestroyed)
 		Script->Tick(DeltaTime);
+}
+
+void AActor::EndPlayActor()
+{
+	if (!bHasBegunPlay || bHasEndedPlay || bIsEndingPlay) return;
+	bHasEndedPlay = true;
+	bHasBegunPlay = false;
+	bIsEndingPlay = true;
+	EndPlay();
+	bIsEndingPlay = false;
 }
 
 void AActor::EndPlay()
 {
-	if (!Script)
-		return;
-
-	Script->Call("EndPlay");
+	if (Script) Script->Call("EndPlay");
 	FCoroutineScheduler::Get().StopAll(this);   // B의 코루틴이 지워질 액터를 다시 깨우지 않게
 	FLuaBindings::ReleaseCallbacks(this);       // 델리게이트에 걸린 Lua 함수 해제 (단계 8 안전장치 참고)
 	delete Script;
@@ -76,7 +91,7 @@ void AActor::EndPlay()
 
 void AActor::RegisterAllActorTickFunctions(bool bRegister)
 {
-	if (bRegister && !World)
+	if (bRegister && (!World || bActorIsBeingDestroyed))
 		return;
 
 	// bCanEverTick이 꺼진 함수는 등록하지 않으므로 정적 메시 액터는 매 프레임 순회 대상에서 빠진다.
@@ -290,6 +305,7 @@ FTransform AActor::GetActorTransform() const
 
 bool AActor::Destroy()
 {
+	if (bActorIsBeingDestroyed || IsGarbage()) return true;
 	if (!World)
 		return false;
 
@@ -298,7 +314,7 @@ bool AActor::Destroy()
 
 UActorComponent* AActor::AddComponent(UClass* ComponentClass, FName Name)
 {
-	if (!ComponentClass || !ComponentClass->IsChildOf(UActorComponent::StaticClass()))
+	if (bActorIsBeingDestroyed || !ComponentClass || !ComponentClass->IsChildOf(UActorComponent::StaticClass()))
 	{
 		return nullptr;
 	}
@@ -326,7 +342,7 @@ UActorComponent* AActor::AddComponent(UClass* ComponentClass, FName Name)
 
 void AActor::DestroyComponent(UActorComponent* Component)
 {
-	if (!Component)
+	if (!IsValid(Component) || Components.Find(Component) == INDEX_NONE)
 		return;
 
 	if (Component == RootComponent)
@@ -347,9 +363,13 @@ void AActor::DestroyComponent(UActorComponent* Component)
 		}
 	}
 
+	UWorld* OwningWorld = World;
+	if (!OwningWorld) return;
+	Component->MarkAsGarbage();
 	Component->UnregisterComponent();
 	RemoveOwnedComponent(Component);
-	delete Component;
+	Component->SetOwner(nullptr);
+	OwningWorld->QueueObjectDeletion(Component);
 	return;
 }
 
@@ -417,6 +437,7 @@ bool AActor::TryGetActorBounds(FBox& OutBounds) const
 
 void AActor::NotifyActorBeginOverlap(AActor* OtherActor)
 {
+	if (bActorIsBeingDestroyed) return;
 	// TODO(A): if (Script) Script->Call("OnBeginOverlap", OtherActor);
 	//          sol.hpp는 LuaScriptInstance.cpp 안에서만 include하도록 비템플릿 진입점을 거친다
 	if (Script)
@@ -425,6 +446,7 @@ void AActor::NotifyActorBeginOverlap(AActor* OtherActor)
 
 void AActor::NotifyActorEndOverlap(AActor* OtherActor)
 {
+	if (bActorIsBeingDestroyed) return;
 	// TODO(A): if (Script) Script->Call("OnEndOverlap", OtherActor);
 	if (Script)
 		Script->Call("OnEndOverlap", OtherActor);
@@ -432,6 +454,7 @@ void AActor::NotifyActorEndOverlap(AActor* OtherActor)
 
 void AActor::NotifyHit(AActor* OtherActor)
 {
+	if (bActorIsBeingDestroyed) return;
 	// TODO(A): if (Script) Script->Call("OnHit", OtherActor);
 	if (Script)
 		Script->Call("OnHit", OtherActor);
@@ -440,6 +463,7 @@ void AActor::NotifyHit(AActor* OtherActor)
 
 void AActor::NotifyDeath(AActor* OtherActor)
 {
+	if (bActorIsBeingDestroyed) return;
 	if (Script)
 		Script->Call("OnDeath", OtherActor);
 }

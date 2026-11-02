@@ -760,7 +760,7 @@ void UEditorEngine::TickPIEInput(float DeltaTime)
 		return;
 	}
 	constexpr EKeyCode Keys[] = { EKeyCode::W, EKeyCode::A, EKeyCode::S, EKeyCode::D,
-		EKeyCode::Space, EKeyCode::Shift };
+		EKeyCode::Q, EKeyCode::E, EKeyCode::Space, EKeyCode::Shift };
 	for (EKeyCode Key : Keys)
 	{
 		if (FInputSystem::IsKeyPressed(Key))

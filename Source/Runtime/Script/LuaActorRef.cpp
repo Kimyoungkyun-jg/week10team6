@@ -15,6 +15,7 @@ FLuaActorRef FLuaActorRef::Make(AActor* Actor)
 	if (Actor)
 	{
 		Ref.World = Actor->GetWorld();
+		Ref.WorldUUID = Ref.World ? Ref.World->GetUUID() : 0;
 		Ref.Ptr = Actor;
 		Ref.UUID = Actor->GetUUID();
 	}
@@ -23,7 +24,9 @@ FLuaActorRef FLuaActorRef::Make(AActor* Actor)
 
 AActor* FLuaActorRef::Get() const
 {
-	if (!World || !Ptr)
+	uint32 LiveWorldUUID = 0;
+	if (!World || !Ptr || !TryGetLiveObjectUUID(World, UWorld::StaticClass(), LiveWorldUUID) ||
+		LiveWorldUUID != WorldUUID || !IsValid(World))
 	{
 		return nullptr;
 	}
@@ -34,7 +37,7 @@ AActor* FLuaActorRef::Get() const
 		{
 			if (Actor == Ptr)
 			{
-				return Actor->GetUUID() == UUID ? Actor : nullptr;
+				return IsValid(Actor) && !Actor->IsActorBeingDestroyed() && Actor->GetUUID() == UUID ? Actor : nullptr;
 			}
 		}
 	}
@@ -59,6 +62,7 @@ FLuaComponentRef FLuaComponentRef::Make(UActorComponent* Component)
 	{
 		Ref.Owner = Component->GetOwner();
 		Ref.World = Ref.Owner ? Ref.Owner->GetWorld() : nullptr;
+		Ref.WorldUUID = Ref.World ? Ref.World->GetUUID() : 0;
 		Ref.Ptr = Component;
 		Ref.UUID = Component->GetUUID();
 	}
@@ -67,7 +71,9 @@ FLuaComponentRef FLuaComponentRef::Make(UActorComponent* Component)
 
 UActorComponent* FLuaComponentRef::Get() const
 {
-	if (!World || !Ptr)
+	uint32 LiveWorldUUID = 0;
+	if (!World || !Ptr || !TryGetLiveObjectUUID(World, UWorld::StaticClass(), LiveWorldUUID) ||
+		LiveWorldUUID != WorldUUID || !IsValid(World))
 	{
 		return nullptr;
 	}
@@ -75,13 +81,13 @@ UActorComponent* FLuaComponentRef::Get() const
 	{
 		for (AActor* Actor : Level->GetActors())
 		{
-			if (Actor == Owner)
+			if (Actor == Owner && IsValid(Actor) && !Actor->IsActorBeingDestroyed())
 			{
 				for (UActorComponent* Component : Actor->GetComponents())
 				{
 					if (Component == Ptr)
 					{
-						return Component->GetUUID() == UUID ? Component : nullptr;
+						return IsValid(Component) && Component->GetUUID() == UUID ? Component : nullptr;
 					}
 				}
 			}

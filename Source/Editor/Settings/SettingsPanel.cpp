@@ -7,8 +7,12 @@
 #include "Editor/Viewports/ViewportsPanel.h"
 #include "Editor/Viewports/EditorViewportClient.h"
 #include "GameFramework/DefaultPawn.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/GameMode.h"
+#include "GameFramework/GameHUD.h"
 #include "Components/StaticMeshComponent.h"
 #include "UObject/UObjectIterator.h"
+#include "UObject/UObjectHash.h"
 
 // 종료 시 렌더·에디터·뷰포트 설정을 함께 저장한다.
 FSettingsPanel::~FSettingsPanel()
@@ -159,6 +163,7 @@ void FSettingsPanel::OnRender()
 
 	//////////////////////////////////////////////////////////
 	DrawDefaultPawnSettings();
+	DrawGameFrameworkSettings();
 
 	//////////////////////////////////////////////////////////
 	ImGui::Dummy(ImVec2(0.0f, SectionGap));
@@ -184,6 +189,39 @@ void FSettingsPanel::OnRender()
 	//////////////////////////////////////////////////////////
 
 	ImGui::End();
+}
+
+void FSettingsPanel::DrawGameFrameworkSettings()
+{
+	if (!World) return;
+	ImGui::Dummy(ImVec2(0.0f, SectionGap));
+	ImGui::SeparatorText("Scene Game Framework");
+	ImGui::TextDisabled("Use Save Scene to persist. Takes effect on next Play.");
+	ImGui::BeginDisabled(World->IsGameWorld());
+	const auto ClassPicker = [](const char* Label, const FString& CurrentName, UClass* Base,
+		bool bAllowDefault, const auto& SetClass)
+	{
+		const char* Preview = CurrentName.empty() ? "GameMode Default" : CurrentName.c_str();
+		ImGui::SetNextItemWidth(200.0f);
+		if (!ImGui::BeginCombo(Label, Preview)) return;
+		if (bAllowDefault && ImGui::Selectable("GameMode Default", CurrentName.empty())) SetClass(nullptr);
+		TArray<UClass*> Classes;
+		GetDerivedClasses(Base, Classes);
+		Classes.Add(Base);
+		for (UClass* Class : Classes)
+			if (Class && Class->Constructor && ImGui::Selectable(Class->Name.c_str(), CurrentName == Class->Name))
+				SetClass(Class);
+		ImGui::EndCombo();
+	};
+	ClassPicker("Game Mode", World->GetGameModeClassName(), AGameMode::StaticClass(), false,
+		[this](UClass* Class) { World->SetGameModeClass(Class); });
+	ClassPicker("Player Pawn", World->GetPlayerPawnClassName(), APawn::StaticClass(), true,
+		[this](UClass* Class) { World->SetPlayerPawnClass(Class); });
+	ClassPicker("Player Controller", World->GetPlayerControllerClassName(), APlayerController::StaticClass(), true,
+		[this](UClass* Class) { World->SetPlayerControllerClass(Class); });
+	ClassPicker("HUD", World->GetHUDClassName(), AGameHUD::StaticClass(), true,
+		[this](UClass* Class) { World->SetHUDClass(Class); });
+	ImGui::EndDisabled();
 }
 
 // 알려진 설정 섹션을 editor.ini에 함께 기록해 뷰포트 값 유실을 막는다.

@@ -149,6 +149,7 @@ bool FEngineLoop::Tick()
 	{
 		SCOPE_CYCLE_COUNTER(STAT_EngineTick);
 		GEngine->Tick(EngineTimer::GetDeltaTime());
+		GEngine->FlushPendingDestruction();
 	}
 	{
 		SCOPE_CYCLE_COUNTER(STAT_Present);
@@ -172,6 +173,7 @@ void FEngineLoop::Exit()
 	if (GEngine)
 	{
 		GEngine->PreExit();
+		GEngine->FlushPendingDestruction();
 	}
 
 	// UAssetManager도 UObject이므로 일괄 삭제 전에 종료한다.

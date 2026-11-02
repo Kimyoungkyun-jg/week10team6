@@ -108,6 +108,8 @@ public:
 	inline bool HasAllFlags(EObjectFlags FlagsToCheck) const { return (Flags & FlagsToCheck) == FlagsToCheck; }
 	inline EObjectFlags GetFlags() const { return Flags; }
 	EObjectFlags GetMaskedFlags(EObjectFlags Mask = EObjectFlags::RF_AllFlags) const{return EObjectFlags(GetFlags() & Mask);}
+	void MarkAsGarbage() { bGarbage = true; }
+	bool IsGarbage() const { return bGarbage; }
 
 	virtual void Serialize(json& Handle, bool bIsLoading);
 	virtual void Serialize(FArchive& Ar);
@@ -160,11 +162,12 @@ private:
 	EObjectFlags Flags = EObjectFlags::RF_NoFlags;
 
 	bool bIsRegistered = true;
+	bool bGarbage = false;
 };
 
 extern TArray<UObject*> GUObjectArray;
 
 inline bool IsValid(const UObject* Test)
 {
-	return Test != nullptr;
+	return Test != nullptr && !Test->IsGarbage();
 }

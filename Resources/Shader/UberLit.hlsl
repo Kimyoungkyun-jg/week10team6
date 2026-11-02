@@ -55,12 +55,6 @@ cbuffer MaterialParams : register(b2)
     float4 SpecularColorShininess; // rgb: 정반사 색상, w: 광택 지수
 };
 
-cbuffer DecalParams : register(b3)
-{
-    matrix WorldToDecal;
-    float4 TintOpacity; // rgb: 색상, a: 불투명도
-}
-
 Texture2D ColorTexture : register(t0);
 Texture2D NormalTexture : register(t1);
 

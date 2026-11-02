@@ -19,6 +19,7 @@
 #include "GameFramework/Actor/SkeletalMeshActor.h"
 #include "GameFramework/Actor/DecalActor.h"
 #include "GameFramework/Actor/DecalFadeActor.h"
+#include "GameFramework/Actor/PlayerStart.h"
 class FViewportsPanel;
 
 // 액터 생성과 카메라·기즈모 편집에 필요한 패널 상태를 보관한다.
@@ -42,7 +43,7 @@ public:
 
 	int32 SelectedIndex = 0;
 
-	const char* Items[11] = {"StaticMesh", "Particle", "Text", "HeightFog", "FireBall", "Projectile", "ScoreboardManager", "SkeletalMesh", "LevelSequence", "Decal", "DecalFade"};
+	const char* Items[12] = {"StaticMesh", "Particle", "Text", "HeightFog", "FireBall", "Projectile", "ScoreboardManager", "SkeletalMesh", "LevelSequence", "Decal", "DecalFade", "PlayerStart"};
 
 	FGizmo* Gizmo = nullptr;
 	int32 GizmoSelectedIndex = 0;
@@ -64,6 +65,7 @@ public:
 		ALevelSequenceActor::StaticClass(),
 		ADecalActor::StaticClass(),
 		ADecalFadeActor::StaticClass(),
+		APlayerStart::StaticClass(),
 	};
 
 private:

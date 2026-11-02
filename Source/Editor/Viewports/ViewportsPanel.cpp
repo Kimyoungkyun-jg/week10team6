@@ -402,8 +402,22 @@ void FViewportsPanel::DrawStatOverlay(ImDrawList* DrawList, const ImVec2& ViewMi
 		ProfileLines.Add(Line);
 	}
 
-FSceneRenderData& RenderData = Client->GetRenderData();
+ FSceneRenderData& RenderData = GameViewportClient && Client->GetViewIndex() == GameViewportIndex
+	 ? GameViewportClient->GetRenderData() : Client->GetRenderData();
 const FRenderStats& Stats = RenderData.RenderStats;
+	if (FStatOverlay::IsEnabled(EStatFlags::Decal)) {
+		Lines.Add({ "Decal", TitleColor });
+		Lines.Add({ std::format("  Registered {}  Visible {}  Draws {}",
+			Stats.TotalDecals, Stats.VisibleDecals, Stats.DecalDrawCalls), ValueColor });
+		if (Stats.DecalDrawCalls == 0)
+			Lines.Add({ "  GPU  0.000 ms", ValueColor });
+		else if (RenderData.DecalGpuTimer.HasSample())
+			Lines.Add({ std::format("  GPU ms  Last {:.3f}  Avg {:.3f}  Max {:.3f}",
+				RenderData.DecalGpuTimer.GetLastMs(), RenderData.DecalGpuTimer.GetAverageMs(),
+				RenderData.DecalGpuTimer.GetMaxMs()), ValueColor });
+		else
+			Lines.Add({ "  GPU  pending", ValueColor });
+	}
 	if (FStatOverlay::IsEnabled(EStatFlags::Light)) {
 		Lines.Add({ "Light", TitleColor });
 		Lines.Add({ std::format("  Total Lights {} ", Stats.DirectionalCount + Stats.PointCount + Stats.SpotCount), ValueColor });

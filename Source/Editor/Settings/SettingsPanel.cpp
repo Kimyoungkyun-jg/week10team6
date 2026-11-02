@@ -6,9 +6,12 @@
 #include "Engine/World.h"
 #include "Editor/Viewports/ViewportsPanel.h"
 #include "Editor/Viewports/EditorViewportClient.h"
-#include "GameFramework/DefaultPawn.h"
-#include "Components/StaticMeshComponent.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/GameMode.h"
+#include "GameFramework/GameHUD.h"
 #include "UObject/UObjectIterator.h"
+#include "UObject/UObjectHash.h"
 
 // 종료 시 렌더·에디터·뷰포트 설정을 함께 저장한다.
 FSettingsPanel::~FSettingsPanel()
@@ -141,7 +144,7 @@ void FSettingsPanel::OnRender()
 	//////////////////////////////////////////////////////////
 
 	//////////////////////////////////////////////////////////
-	DrawDefaultPawnSettings();
+	DrawGameFrameworkSettings();
 
 	//////////////////////////////////////////////////////////
 	ImGui::Dummy(ImVec2(0.0f, SectionGap));
@@ -167,6 +170,39 @@ void FSettingsPanel::OnRender()
 	//////////////////////////////////////////////////////////
 
 	ImGui::End();
+}
+
+void FSettingsPanel::DrawGameFrameworkSettings()
+{
+	if (!World) return;
+	ImGui::Dummy(ImVec2(0.0f, SectionGap));
+	ImGui::SeparatorText("Scene Game Framework");
+	ImGui::TextDisabled("Use Save Scene to persist. Takes effect on next Play.");
+	ImGui::BeginDisabled(World->IsGameWorld());
+	const auto ClassPicker = [](const char* Label, const FString& CurrentName, UClass* Base,
+		bool bAllowDefault, const auto& SetClass)
+	{
+		const char* Preview = CurrentName.empty() ? "GameMode Default" : CurrentName.c_str();
+		ImGui::SetNextItemWidth(200.0f);
+		if (!ImGui::BeginCombo(Label, Preview)) return;
+		if (bAllowDefault && ImGui::Selectable("GameMode Default", CurrentName.empty())) SetClass(nullptr);
+		TArray<UClass*> Classes;
+		GetDerivedClasses(Base, Classes);
+		Classes.Add(Base);
+		for (UClass* Class : Classes)
+			if (Class && Class->Constructor && ImGui::Selectable(Class->Name.c_str(), CurrentName == Class->Name))
+				SetClass(Class);
+		ImGui::EndCombo();
+	};
+	ClassPicker("Game Mode", World->GetGameModeClassName(), AGameMode::StaticClass(), false,
+		[this](UClass* Class) { World->SetGameModeClass(Class); });
+	ClassPicker("Player Pawn", World->GetPlayerPawnClassName(), APawn::StaticClass(), true,
+		[this](UClass* Class) { World->SetPlayerPawnClass(Class); });
+	ClassPicker("Player Controller", World->GetPlayerControllerClassName(), APlayerController::StaticClass(), true,
+		[this](UClass* Class) { World->SetPlayerControllerClass(Class); });
+	ClassPicker("HUD", World->GetHUDClassName(), AGameHUD::StaticClass(), true,
+		[this](UClass* Class) { World->SetHUDClass(Class); });
+	ImGui::EndDisabled();
 }
 
 // 알려진 설정 섹션을 editor.ini에 함께 기록해 뷰포트 값 유실을 막는다.
@@ -484,66 +520,6 @@ void FSettingsPanel::ApplySceneDepthRange()
 		if (FEditorViewportClient* Client = ViewportsPanel->GetViewportClient(Index))
 			Client->SetMaxRange(Settings.SceneDepthMaxRange);
 	}
-}
-
-void FSettingsPanel::DrawDefaultPawnSettings()
-{
-    ImGui::Dummy(ImVec2(0.0f, SectionGap));
-    ImGui::SeparatorText("DefaultPawn Settings");
-    ADefaultPawn* Pawn = World ? Cast<ADefaultPawn>(World->GetPlayerPawn()) : nullptr;
-    if (!Pawn)
-    {
-        ImGui::TextDisabled("Start PIE with a DefaultPawn to edit these settings.");
-        return;
-    }
-
-    const auto DrawMeshPicker = [](const char* Label, UStaticMesh*& SelectedMesh)
-    {
-        const auto GetMeshDisplayName = [](const UStaticMesh* Mesh) -> FString
-        {
-            if (!Mesh) return "None";
-            const fs::path Path(Mesh->GetPath());
-            return Path.stem() == "Atlas"
-                ? Path.parent_path().filename().string()
-                : Path.stem().string();
-        };
-        const FString Preview = GetMeshDisplayName(SelectedMesh);
-        bool bChanged = false;
-        const bool bOpen = ImGui::BeginCombo(Label, Preview.c_str());
-        if (SelectedMesh && ImGui::IsItemHovered())
-            ImGui::SetTooltip("%s", SelectedMesh->GetPath().c_str());
-        if (bOpen)
-        {
-            if (ImGui::Selectable("None", SelectedMesh == nullptr))
-            {
-                SelectedMesh = nullptr;
-                bChanged = true;
-            }
-            for (TObjectIterator<UStaticMesh> Mesh; Mesh; ++Mesh)
-            {
-                const FString Name = GetMeshDisplayName(*Mesh);
-                const bool bSelected = *Mesh == SelectedMesh;
-                ImGui::PushID(*Mesh);
-                if (ImGui::Selectable(Name.c_str(), bSelected))
-                {
-                    SelectedMesh = *Mesh;
-                    bChanged = true;
-                }
-                if (bSelected) ImGui::SetItemDefaultFocus();
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", Mesh->GetPath().c_str());
-                ImGui::PopID();
-            }
-            ImGui::EndCombo();
-        }
-        return bChanged;
-    };
-
-    UStaticMeshComponent* PawnMesh = Pawn->GetStaticMeshComponent();
-    if (PawnMesh)
-    {
-        UStaticMesh* Mesh = PawnMesh->GetStaticMesh();
-        if (DrawMeshPicker("Pawn Mesh", Mesh)) PawnMesh->SetStaticMesh(Mesh);
-    }
 }
 
 void FSettingsPanel::DrawShadowMapSettings()

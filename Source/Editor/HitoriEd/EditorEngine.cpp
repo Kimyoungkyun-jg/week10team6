@@ -507,6 +507,8 @@ void UEditorEngine::UpdateViewportState(const float DeltaTime)
 		FEditorViewportClient* Client = ViewportsPanel->GetViewportClient(i);
 		if (!Client || !Client->IsActive())
 			continue;
+		if (IsSimulatingInEditor() && i == PIEStartEditorViewIndex)
+			continue;
 
 		Client->TickInput(DeltaTime, i == CapturedViewportIndex,
 			i == HoveredViewIndex, WheelDelta, MoveSpeed, MouseSens);
@@ -514,17 +516,20 @@ void UEditorEngine::UpdateViewportState(const float DeltaTime)
 
 	// 활성 뷰포트 시점 동기화
 	const int32 ActiveIndex = ViewportsPanel->GetActiveViewIndex();
-	if (FEditorViewportClient* ActiveClient = ViewportsPanel->GetViewportClient(ActiveIndex))
+	if (!IsSimulatingInEditor())
 	{
-		if (ACameraActor* MainCam = GetActiveWorld()->GetMainCamera())
+		if (FEditorViewportClient* ActiveClient = ViewportsPanel->GetViewportClient(ActiveIndex))
 		{
-			if (UCameraComponent* CamCom = MainCam->GetCameraComponent())
+			if (ACameraActor* MainCam = GetActiveWorld()->GetMainCamera())
 			{
-				CamCom->SetRelativeLocation(ActiveClient->GetViewLocation());
-				CamCom->SetRelativeRotation(ActiveClient->GetViewRotation());
-				CamCom->SetFieldOfView(ActiveClient->GetViewFOV());
-				CamCom->SetOrthoWidth(ActiveClient->GetOrthoWidth());
-				CamCom->SetIsOrthogonal(!ActiveClient->IsPerspective());
+				if (UCameraComponent* CamCom = MainCam->GetCameraComponent())
+				{
+					CamCom->SetRelativeLocation(ActiveClient->GetViewLocation());
+					CamCom->SetRelativeRotation(ActiveClient->GetViewRotation());
+					CamCom->SetFieldOfView(ActiveClient->GetViewFOV());
+					CamCom->SetOrthoWidth(ActiveClient->GetOrthoWidth());
+					CamCom->SetIsOrthogonal(!ActiveClient->IsPerspective());
+				}
 			}
 		}
 	}
@@ -768,7 +773,7 @@ void UEditorEngine::TickPIEInput(float DeltaTime)
 		return;
 	}
 	constexpr EKeyCode Keys[] = { EKeyCode::W, EKeyCode::A, EKeyCode::S, EKeyCode::D,
-		EKeyCode::Space, EKeyCode::Shift };
+		EKeyCode::Q, EKeyCode::E, EKeyCode::Space, EKeyCode::Shift };
 	for (EKeyCode Key : Keys)
 	{
 		if (FInputSystem::IsKeyPressed(Key))

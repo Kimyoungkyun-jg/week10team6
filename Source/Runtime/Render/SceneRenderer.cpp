@@ -9,6 +9,7 @@
 #include "Engine/World.h"
 #include "Tasks/Tasks.h"
 #include "Core/Stats/LightweightStats.h"
+#include "Core/StatOverlay.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/DecalSceneProxy.h"
 #include "Asset/AssetManager.h"
@@ -326,6 +327,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 
 	bCorePassSucceeded = true;
 	bTilesBuilt = false;
+	if (FStatOverlay::IsEnabled(EStatFlags::Decal)) RenderData.DecalGpuTimer.Poll();
 	if (Options.bShowWorldNormal)
 		return AddWorldNormalPass(Graph, Renderer, Targets, Options);
 
@@ -502,6 +504,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 	else // Forward Rendering
 	{
 		std::vector<const FDecalSceneProxy*> Decals;
+		RenderData.RenderStats.TotalDecals = World->GetScene().GetDecals().Num();
 		if (Options.bDrawPrimitives && Options.bDrawDecal && Options.LightingModel == ELightingModel::Phong)
 		{
 			for (const FDecalSceneProxy* Decal : World->GetScene().GetDecals())
@@ -512,6 +515,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 				Decals.push_back(Decal);
 			}
 		}
+		RenderData.RenderStats.VisibleDecals = static_cast<uint32>(Decals.size());
 		const FRenderGraphTextureRef NormalDecalMask = Decals.empty() ? FRenderGraphTextureRef{} :
 			Graph.CreateTexture(HDRDesc, "ForwardNormalDecalMask");
 		if (!Decals.empty() && !NormalDecalMask) return false;
@@ -658,6 +662,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					RenderCommand::BindPipelineState(*Pipeline);
 					RenderCommand::BindMesh(Cube);
 					RenderCommand::BindSamplerState(0, ESamplerState::LinearClamp, EShaderBindFlagBits::Pixel);
+					const bool bTimed = FStatOverlay::IsEnabled(EStatFlags::Decal) && RenderData.DecalGpuTimer.Begin();
 					for (const FDecalSceneProxy* Decal : Decals)
 					{
 						FDecalViewConstants ViewConstants{};
@@ -678,7 +683,9 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 						RenderCommand::BindConstantBuffer(2, Renderer->GetDecalParameters(), EShaderBindFlagBits::Pixel);
 						RenderCommand::BindShaderResource(2, Decal->GetTexture(), EShaderBindFlagBits::Pixel);
 						RenderCommand::DrawIndexed(Cube->GetIndexBuffer(0)->GetIndexCount());
+						++RenderData.RenderStats.DecalDrawCalls;
 					}
+					if (bTimed) RenderData.DecalGpuTimer.End();
 					RenderCommand::UnbindShaderResources(2, 1, EShaderBindFlagBits::Pixel);
 					UnbindForwardLighting(Renderer);
 				})) return false;

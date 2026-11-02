@@ -14,6 +14,7 @@ namespace FLuaBindings
 
 	// Lua에서 Destroy를 부른 액터를 실제로 지운다. UWorld::Tick이 UpdateOverlaps() 직후 1회 호출.
 	void FlushPendingDestroy(UWorld* World);
+	void DiscardPendingDestroy(UWorld* World);
 
 	// 해당 액터의 Lua 콜백을 전부 푼다.
 	void ReleaseCallbacks(AActor* Owner);

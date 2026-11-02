@@ -7,6 +7,7 @@
 #include "Render/LightRenderData.h"
 #include "Render/SceneLightResources.h"
 #include "Render/SceneRendering.h"
+#include "Render/GPUTimer.h"
 #include "Math/Matrix.h"
 #include <algorithm>
 #include <cmath>
@@ -19,6 +20,9 @@ struct FRenderStats
 	uint32 TotalPrimitives = 0;
 	uint32 VisiblePrimitives = 0;
 	uint32 DrawCalls = 0;
+	uint32 TotalDecals = 0;
+	uint32 VisibleDecals = 0;
+	uint32 DecalDrawCalls = 0;
 	uint64 Triangles = 0;
 	uint32 LODCounts[4] = {};
 	uint64 LODTriangles[4] = {};
@@ -70,6 +74,7 @@ struct FSceneRenderData
 
 	FRenderQueue RenderQueue;
 	FRenderStats RenderStats;
+	FGPUTimer DecalGpuTimer;
 	TArray<FPrimitiveSceneProxy*> VisibleProxies;
 	TArray<FLODSelectionInput> LODInputs;
 	TArray<uint8> SelectedLODs;
@@ -138,6 +143,7 @@ struct FSceneRenderData
 	void ResetScene()
 	{
 		ResetFrame();
+		DecalGpuTimer.Reset();
 		for (FGatherChunk& Chunk : GatherChunks)
 		{
 			Chunk.Groups.clear();

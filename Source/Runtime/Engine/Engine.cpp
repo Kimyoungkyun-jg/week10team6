@@ -143,9 +143,16 @@ void UEngine::DestroyWorld(UWorld* InWorld)
 	const bool bOwnsCamera = Camera && !Camera->GetLevel();
 	InWorld->SetMainCamera(nullptr);
 	InWorld->ClearWorld();
+	InWorld->FlushPendingDestruction();
 	for (ULevel* Level : InWorld->GetLevels()) delete Level;
 	if (bOwnsCamera) delete Camera;
 	delete InWorld;
+}
+
+void UEngine::FlushPendingDestruction()
+{
+	for (FWorldContext& Context : WorldContextlist)
+		if (UWorld* World = Context.World()) World->FlushPendingDestruction();
 }
 
 void UEngine::SetClientTravel(UWorld* InWorld, const FString& MapPath)

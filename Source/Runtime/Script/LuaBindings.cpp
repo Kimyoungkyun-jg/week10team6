@@ -969,6 +969,7 @@ namespace FLuaBindings
 		{
 			if (Ref.World != World)
 			{
+				PendingDestroies.Add(Ref);
 				continue;
 			}
 			if (AActor* Actor = Ref.Get()) // 살아 있는 액터만 Destroy
@@ -976,6 +977,12 @@ namespace FLuaBindings
 				Actor->Destroy();
 			}
 		}
+	}
+
+	void DiscardPendingDestroy(UWorld* World)
+	{
+		for (int32 i = PendingDestroies.Num() - 1; i >= 0; --i)
+			if (PendingDestroies[i].World == World) PendingDestroies.RemoveAt(i);
 	}
 
 	void ReleaseCallbacks(AActor* Owner)

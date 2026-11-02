@@ -1,4 +1,4 @@
-#include "EnginePCH.h"
+﻿#include "EnginePCH.h"
 #include "FbxImporter.h"
 #include <fbxsdk.h>
 #include "Render/SkeletalMeshData.h"
@@ -65,7 +65,7 @@ namespace
         }
     }
 
-    void ProcessPolygons(fbxsdk::FbxMesh* Mesh, FFbxInfo& Out)
+    void ProcessPolygons(fbxsdk::FbxMesh* Mesh, FFbxInfo& Out, const fbxsdk::FbxAMatrix& MeshMatrix)
     {
         int PolygonCount = Mesh->GetPolygonCount();
         Out.Polygons.Reserve(PolygonCount);
@@ -133,7 +133,8 @@ namespace
                 fbxsdk::FbxVector4 FbxNorm;
                 if (Mesh->GetPolygonVertexNormal(polyIdx, corner, FbxNorm))
                 {
-                    Corner.Normal = FVector((float)FbxNorm[0], (float)FbxNorm[1], (float)FbxNorm[2]);
+                    fbxsdk::FbxVector4 TransformedNorm = MeshMatrix.MultR(FbxNorm);
+                    Corner.Normal = FVector((float)TransformedNorm[0], (float)TransformedNorm[1], (float)TransformedNorm[2]);
                 }
 
                 // UV 추출
@@ -165,6 +166,22 @@ namespace
         {
             fbxsdk::FbxMesh* Mesh = Node->GetMesh();
             if (!Mesh) return;
+
+            fbxsdk::FbxAMatrix MeshMatrix;
+            MeshMatrix.SetIdentity();
+            int SkinCount = Mesh->GetDeformerCount(fbxsdk::FbxDeformer::eSkin);
+            if (SkinCount > 0)
+            {
+                fbxsdk::FbxSkin* Skin = (fbxsdk::FbxSkin*)Mesh->GetDeformer(0, fbxsdk::FbxDeformer::eSkin);
+                if (Skin && Skin->GetClusterCount() > 0)
+                {
+                    Skin->GetCluster(0)->GetTransformMatrix(MeshMatrix);
+                }
+            }
+            else
+            {
+                MeshMatrix = Node->EvaluateGlobalTransform();
+            }
 
             fbxsdk::FbxPose* BindPose = nullptr;
             int MeshPoseIndex = -1;
@@ -200,15 +217,16 @@ namespace
             for (int i = 0; i < ControlPointCount; ++i)
             {
                 // FBX 좌표를 엔진 FVector로 복사
+                fbxsdk::FbxVector4 TransformedPos = MeshMatrix.MultT(ControlPoints[i]);
                 Out.ControlPoints[i] = FVector(
-                    (float)ControlPoints[i][0],
-                    (float)ControlPoints[i][1],
-                    (float)ControlPoints[i][2]
+                    static_cast<float>(TransformedPos[0]),
+                    static_cast<float>(TransformedPos[1]),
+                    static_cast<float>(TransformedPos[2])
                 );
             }
 
             // 스킨 디포머 파싱
-            int SkinCount = Mesh->GetDeformerCount(fbxsdk::FbxDeformer::eSkin);
+            //int SkinCount = Mesh->GetDeformerCount(fbxsdk::FbxDeformer::eSkin);
             for (int i = 0; i < SkinCount; ++i)
             {
                 fbxsdk::FbxSkin* Skin = (fbxsdk::FbxSkin*)Mesh->GetDeformer(i, fbxsdk::FbxDeformer::eSkin);
@@ -277,9 +295,10 @@ namespace
                     }
                 }
             }
+            // ?뺤젏??MeshMatrix濡?蹂?섎릺????怨듦컙(+X Forward, +Y Right, +Z Up)???뺣젹?섏뿀?쇰?濡? 蹂???떆 ??怨듦컙 洹몃?濡?留ㅼ묶
+            // (MeshBindInverse瑜?怨깊븯硫?硫붿돩? 蹂몄씠 ?ㅼ떆 釉붾젋??濡쒖뺄 怨듦컙?쇰줈 ??쉶?꾨릺??踰꾨┝)
             for (FBoneInfo& Bone : Out.Bones)
             {
-                Bone.GlobalBindPose = Bone.GlobalBindPose * MeshBindInverse;
                 Bone.InverseBindPose = Bone.GlobalBindPose.Inverse();
             }
 
@@ -312,7 +331,7 @@ namespace
             }
 
             // 폴리곤 데이터 읽기
-            ProcessPolygons(Mesh, Out);
+            ProcessPolygons(Mesh, Out, MeshMatrix);
             return; // 일단 첫 번째 메쉬 처리 후 종료
         }
 
@@ -556,7 +575,7 @@ bool FFbxImporter::Cook(const FFbxInfo& Raw, FSkeletalMeshData& Out)
             int32 PolyMtlIdx = (Poly.MaterialIndex >= 0 && Poly.MaterialIndex < MaterialCount) ? Poly.MaterialIndex : 0;
             if (PolyMtlIdx != mtlIdx) continue;
 
-            const int CornerOrder[3] = { 1, 2, 0 };
+            const int CornerOrder[3] = { 2, 1, 0 };
             // 삼각형 3개 꼭짓점을 정점으로 변환 (CW 앞면 정렬)
             for (int i = 0; i < 3; ++i)
             {

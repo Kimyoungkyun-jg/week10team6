@@ -964,6 +964,7 @@ void UEditorEngine::RenderGameFrame(FGameViewportClient* GameClient, const FScen
 					LineBatcher->BeginFrame();
 					DrawCollisionShapes(GameClient->GetWorld(), LineBatcher.get(), nullptr);
 					DrawSpringArms(GameClient->GetWorld(), LineBatcher.get(), nullptr);
+					DrawDecalVolume(GameClient->GetWorld(), LineBatcher.get(), nullptr);
 					LineBatcher->OnRender(SceneView.ViewProjectionMatrix);
 				};
 			if (!bIsSIEMode) return;
@@ -1176,6 +1177,7 @@ void UEditorEngine::RenderFrame(FEditorViewportClient* ViewClient,
 
 						DrawCollisionShapes(EditorWorld, LineBatcher.get(), SelectedActor);
 						DrawSpringArms(EditorWorld, LineBatcher.get(), SelectedActor);
+						DrawDecalVolume(EditorWorld, LineBatcher.get(), SelectedActor);
 
 						LineBatcher->OnRender(SceneView.ViewProjectionMatrix);
 					};

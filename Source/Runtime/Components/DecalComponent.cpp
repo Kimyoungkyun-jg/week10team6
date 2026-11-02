@@ -4,6 +4,10 @@
 #include <algorithm>
 #include <cmath>
 
+#include "Render/LineBatcher.h"
+#include "UObject/UObjectIterator.h"
+#include "GameFramework/Actor.h"
+
 UDecalComponent::UDecalComponent()
 {
 	// 로컬 박스: XYZ 모두 [-0.5, +0.5]
@@ -68,4 +72,26 @@ bool UDecalComponent::TryGetRenderData(
 
 	OutRenderData = Data;
 	return true;
+}
+
+void DrawDecalVolume(UWorld* World, FLineBatcher* LineBatcher, const AActor* Selected)
+{
+	if (!World || !LineBatcher) return;
+
+	for (TObjectIterator<UDecalComponent> It; It; ++It)
+	{
+		UDecalComponent* Decal = *It;
+
+		if (!Decal ||
+			Decal->GetWorld() != World ||
+			!Decal->IsRegistered())
+		{
+			continue;
+		}
+
+		LineBatcher->AddOrientedBox(
+			Decal->CalcLocalBounds(),
+			Decal->GetWorldMatrix(),
+			FVector4(0.0f, 1.0f, 1.0f, 1.0f));
+	}
 }

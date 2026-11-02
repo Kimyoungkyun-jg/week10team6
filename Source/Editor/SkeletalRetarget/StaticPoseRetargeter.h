@@ -1,0 +1,11 @@
+#pragma once
+
+#include "Core/Types.h"
+
+class USkeletalMesh;
+class USkeletalMeshComponent;
+
+// TargetBoneToSourceBone is indexed by the human mesh's bones; -1 leaves a bone unmapped.
+bool ApplyStaticRigPose(const USkeletalMesh& SourceRig, USkeletalMeshComponent& TargetMesh,
+	const TArray<int32>& TargetBoneToSourceBone, const TArray<int32>& TargetAimChild,
+	int32 SourceYawQuarterTurns, FString& OutError);

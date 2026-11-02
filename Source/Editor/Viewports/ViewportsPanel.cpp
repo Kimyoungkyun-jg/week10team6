@@ -13,18 +13,18 @@
 #include "Core/Stats/EditorStats.h"
 
 namespace {
-constexpr float SplitterThickness = 6.0f;
-constexpr ImU32 SplitterColor = IM_COL32(55, 55, 55, 230);
-constexpr ImU32 SplitterHoverColor = IM_COL32(255, 192, 0, 255);
-constexpr const char *ViewportTypeLabels[] = {
-		"Perspective", "Top", "Front", "Right"};
+	constexpr float SplitterThickness = 6.0f;
+	constexpr ImU32 SplitterColor = IM_COL32(55, 55, 55, 230);
+	constexpr ImU32 SplitterHoverColor = IM_COL32(255, 192, 0, 255);
+	constexpr const char* ViewportTypeLabels[] = {
+			"Perspective", "Top", "Front", "Right" };
 
-// Stat Overlay
-constexpr float StatOverlayMargin = 8.0f;
-constexpr float StatOverlayPadding = 6.0f;
-constexpr ImU32 StatOverlayBackgroundColor = IM_COL32(0, 0, 0, 140);
-constexpr ImU32 TitleColor = IM_COL32(255, 210, 60, 255);
-constexpr ImU32 ValueColor = IM_COL32(235, 235, 235, 255);
+	// Stat Overlay
+	constexpr float StatOverlayMargin = 8.0f;
+	constexpr float StatOverlayPadding = 6.0f;
+	constexpr ImU32 StatOverlayBackgroundColor = IM_COL32(0, 0, 0, 140);
+	constexpr ImU32 TitleColor = IM_COL32(255, 210, 60, 255);
+	constexpr ImU32 ValueColor = IM_COL32(235, 235, 235, 255);
 } // namespace
 
 // 네 View의 렌더 타깃을 최소 크기로 초기화한다.
@@ -48,10 +48,10 @@ bool FViewportsPanel::Init() {
 void FViewportsPanel::Tick(float DeltaTime) { (void)DeltaTime; }
 
 // Core Rect에 맞춰 View 활성 상태와 타깃 크기를 갱신한다.
-void FViewportsPanel::SetView(const int32 ViewIndex, const FRect &Rect,
-			const bool bActive) {
+void FViewportsPanel::SetView(const int32 ViewIndex, const FRect& Rect,
+	const bool bActive) {
 	assert(ViewIndex >= 0 && ViewIndex < 4);
-	FEditorViewportClient *Client = ViewportClients[ViewIndex].get();
+	FEditorViewportClient* Client = ViewportClients[ViewIndex].get();
 	if (!Client)
 		return;
 
@@ -73,7 +73,7 @@ FVector2 FViewportsPanel::GetLocalMousePosition() const {
 	const ImVec2 Mouse = ::GetCursorPos(&Cursor)
 		? ImVec2(static_cast<float>(Cursor.x), static_cast<float>(Cursor.y))
 		: ImGui::GetMousePos();
-	return {Mouse.x - ContentOrigin.x, Mouse.y - ContentOrigin.y};
+	return { Mouse.x - ContentOrigin.x, Mouse.y - ContentOrigin.y };
 }
 
 // 엔진 입력 처리는 ImGui NewFrame보다 먼저 실행되므로 현재 OS 커서로 버튼
@@ -82,8 +82,8 @@ bool FViewportsPanel::IsHovered() const {
 	if (bStatResetButtonVisible && FStatOverlay::IsAnyEnabled()) {
 		POINT Cursor{};
 		if (::GetCursorPos(&Cursor) && Cursor.x >= StatResetButtonMin.x &&
-				Cursor.x < StatResetButtonMax.x && Cursor.y >= StatResetButtonMin.y &&
-				Cursor.y < StatResetButtonMax.y)
+			Cursor.x < StatResetButtonMax.x && Cursor.y >= StatResetButtonMin.y &&
+			Cursor.y < StatResetButtonMax.y)
 			return false;
 	}
 	const FVector2 Mouse = GetLocalMousePosition();
@@ -106,8 +106,8 @@ float FViewportsPanel::ConsumeVerticalDrag() {
 }
 
 // 대기 Layout 요청을 한 번 반환하고 플래그를 지운다.
-bool FViewportsPanel::ConsumeLayoutRequest(ELayoutMode &OutMode,
-			int32 &OutSingleViewIndex) {
+bool FViewportsPanel::ConsumeLayoutRequest(ELayoutMode& OutMode,
+	int32& OutSingleViewIndex) {
 	if (!bHasLayoutRequest)
 		return false;
 	OutMode = RequestedLayoutMode;
@@ -122,11 +122,11 @@ bool FViewportsPanel::ConsumeLayoutRequest(ELayoutMode &OutMode,
 
 // View Texture와 Splitter·Layout·Preset UI를 그리고 요청을 기록한다.
 void FViewportsPanel::OnRender() {
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0.0f, 0.0f });
 	ImGui::Begin("Viewports", nullptr,
-			ImGuiWindowFlags_NoScrollbar |
-			ImGuiWindowFlags_NoScrollWithMouse |
-			ImGuiWindowFlags_NoTitleBar);
+		ImGuiWindowFlags_NoScrollbar |
+		ImGuiWindowFlags_NoScrollWithMouse |
+		ImGuiWindowFlags_NoTitleBar);
 
 	ContentOrigin = ImGui::GetCursorScreenPos();
 	ContentSize = ImGui::GetContentRegionAvail();
@@ -142,18 +142,18 @@ void FViewportsPanel::OnRender() {
 	ImGui::Dummy(ContentSize);
 	ImDrawList* DrawList = ImGui::GetWindowDrawList();
 	DrawList->PushClipRect(ContentOrigin,
-		{ContentOrigin.x + ContentSize.x, ContentOrigin.y + ContentSize.y}, true);
+		{ ContentOrigin.x + ContentSize.x, ContentOrigin.y + ContentSize.y }, true);
 	for (int32 ViewIndex = 0; ViewIndex < 4; ++ViewIndex)
 	{
 		FEditorViewportClient* Client = ViewportClients[ViewIndex].get();
 		if (!Client || !Client->IsActive())
 			continue;
 
-		const FRect &Rect = Client->GetRect();
-		const ImVec2 ViewMin{ContentOrigin.x + Rect.X,
-			ContentOrigin.y + Rect.Y};
-		const ImVec2 ViewMax{ViewMin.x + Rect.Width,
-			ViewMin.y + Rect.Height};
+		const FRect& Rect = Client->GetRect();
+		const ImVec2 ViewMin{ ContentOrigin.x + Rect.X,
+			ContentOrigin.y + Rect.Y };
+		const ImVec2 ViewMax{ ViewMin.x + Rect.Width,
+			ViewMin.y + Rect.Height };
 
 		const bool bGameViewport = GameViewportClient && ViewIndex == GameViewportIndex;
 		if (bGameViewport)
@@ -192,8 +192,8 @@ void FViewportsPanel::OnRender() {
 		// 마우스 클릭 시 활성 뷰포트 설정
 		const bool bViewHovered = bHovered && ImGui::IsMouseHoveringRect(ViewMin, ViewMax);
 		if (bViewHovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
-				ImGui::IsMouseClicked(ImGuiMouseButton_Right) ||
-				ImGui::IsMouseClicked(ImGuiMouseButton_Middle))) {
+			ImGui::IsMouseClicked(ImGuiMouseButton_Right) ||
+			ImGui::IsMouseClicked(ImGuiMouseButton_Middle))) {
 			ActiveViewIndex = ViewIndex;
 			ImGui::SetWindowFocus();
 			bFocused = true;
@@ -202,35 +202,35 @@ void FViewportsPanel::OnRender() {
 	DrawList->PopClipRect();
 
 	if (CurrentLayoutMode == ELayoutMode::QuadSplit && ViewportClients[0] && ViewportClients[1] && ViewportClients[2]) {
-		const FRect &Rect0 = ViewportClients[0]->GetRect();
-		const FRect &Rect1 = ViewportClients[1]->GetRect();
-		const FRect &Rect2 = ViewportClients[2]->GetRect();
+		const FRect& Rect0 = ViewportClients[0]->GetRect();
+		const FRect& Rect1 = ViewportClients[1]->GetRect();
+		const FRect& Rect2 = ViewportClients[2]->GetRect();
 		// 분할선 배치 계산
 		const float SplitX =
-				(Rect0.X + Rect0.Width + Rect1.X) * 0.5f;
+			(Rect0.X + Rect0.Width + Rect1.X) * 0.5f;
 		const float SplitY =
-				(Rect0.Y + Rect0.Height + Rect2.Y) * 0.5f;
+			(Rect0.Y + Rect0.Height + Rect2.Y) * 0.5f;
 
 		const ImVec2 VerticalMin{
-				ContentOrigin.x + SplitX - SplitterThickness * 0.5f, ContentOrigin.y};
-		const ImVec2 VerticalMax{VerticalMin.x + SplitterThickness,
-			ContentOrigin.y + ContentSize.y};
-		const ImVec2 HorizontalMin{ContentOrigin.x, ContentOrigin.y + SplitY -
-			SplitterThickness * 0.5f};
-		const ImVec2 HorizontalMax{ContentOrigin.x + ContentSize.x,
-			HorizontalMin.y + SplitterThickness};
+				ContentOrigin.x + SplitX - SplitterThickness * 0.5f, ContentOrigin.y };
+		const ImVec2 VerticalMax{ VerticalMin.x + SplitterThickness,
+			ContentOrigin.y + ContentSize.y };
+		const ImVec2 HorizontalMin{ ContentOrigin.x, ContentOrigin.y + SplitY -
+			SplitterThickness * 0.5f };
+		const ImVec2 HorizontalMax{ ContentOrigin.x + ContentSize.x,
+			HorizontalMin.y + SplitterThickness };
 
 		ImGui::SetCursorScreenPos(VerticalMin);
 		ImGui::InvisibleButton("##MultipleViewportsHorizontalSplitter",
-													 {SplitterThickness, ContentSize.y});
+			{ SplitterThickness, ContentSize.y });
 		ImGui::SetCursorScreenPos(HorizontalMin);
 		ImGui::InvisibleButton("##MultipleViewportsVerticalSplitter",
-													 {ContentSize.x, SplitterThickness});
+			{ ContentSize.x, SplitterThickness });
 
 		const bool bVerticalHovered =
-				bHovered && ImGui::IsMouseHoveringRect(VerticalMin, VerticalMax);
+			bHovered && ImGui::IsMouseHoveringRect(VerticalMin, VerticalMax);
 		const bool bHorizontalHovered =
-				bHovered && ImGui::IsMouseHoveringRect(HorizontalMin, HorizontalMax);
+			bHovered && ImGui::IsMouseHoveringRect(HorizontalMin, HorizontalMax);
 		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
 			bDraggingVerticalSplitter = bVerticalHovered;
 			bDraggingHorizontalSplitter = bHorizontalHovered;
@@ -241,9 +241,9 @@ void FViewportsPanel::OnRender() {
 		}
 
 		const bool bVerticalHighlighted =
-				bDraggingVerticalSplitter || bVerticalHovered;
+			bDraggingVerticalSplitter || bVerticalHovered;
 		const bool bHorizontalHighlighted =
-				bDraggingHorizontalSplitter || bHorizontalHovered;
+			bDraggingHorizontalSplitter || bHorizontalHovered;
 		DrawList->AddRectFilled(VerticalMin, VerticalMax,
 			bVerticalHighlighted ? SplitterHoverColor
 			: SplitterColor);
@@ -262,19 +262,20 @@ void FViewportsPanel::OnRender() {
 			ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
 		else if (bHorizontalHighlighted)
 			ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-	} else {
+	}
+	else {
 		bDraggingVerticalSplitter = false;
 		bDraggingHorizontalSplitter = false;
 	}
 
 	for (int32 ViewIndex = 0; ViewIndex < 4; ++ViewIndex) {
-		FEditorViewportClient *Client = ViewportClients[ViewIndex].get();
+		FEditorViewportClient* Client = ViewportClients[ViewIndex].get();
 		if (!Client || !Client->IsActive())
 			continue;
-		const FRect &Rect = Client->GetRect();
+		const FRect& Rect = Client->GetRect();
 		ImGui::SetCursorScreenPos(
-				{ContentOrigin.x + Rect.X + 8.0f,
-				 ContentOrigin.y + Rect.Y + 8.0f});
+			{ ContentOrigin.x + Rect.X + 8.0f,
+			 ContentOrigin.y + Rect.Y + 8.0f });
 		ImGui::PushID(100 + ViewIndex);
 		int SelectedType = static_cast<int>(Client->GetViewportType());
 		ImGui::SetNextItemWidth(120.0f);
@@ -285,7 +286,7 @@ void FViewportsPanel::OnRender() {
 		ImGui::SameLine();
 		// 장면 채우기 모드 설정
 		int Mode = static_cast<int>(Client->GetViewportMode());
-		const char *Labels[] = {"Solid", "Wireframe", "Scene Depth", "World Normal", "Light Culling", "Cascade", "Shadow Mask"};
+		const char* Labels[] = { "Solid", "Wireframe", "Scene Depth", "World Normal", "Light Culling", "Cascade", "Shadow Mask" };
 		ImGui::SetNextItemWidth(120.0f);
 		if (ImGui::Combo("##FillMode", &Mode, Labels, IM_ARRAYSIZE(Labels))) {
 			Client->SetViewportMode(static_cast<EViewportMode>(Mode));
@@ -297,19 +298,24 @@ void FViewportsPanel::OnRender() {
 				RequestedSingleViewIndex = ViewIndex;
 				bHasLayoutRequest = true;
 			}
-		} else if (ViewIndex == CurrentSingleViewIndex &&
+		}
+		else if (ViewIndex == CurrentSingleViewIndex &&
 			ImGui::SmallButton("Quad")) {
 			RequestedLayoutMode = ELayoutMode::QuadSplit;
 			RequestedSingleViewIndex = ViewIndex;
 			bHasLayoutRequest = true;
 		}
 		if (ViewIndex == ActiveViewIndex && !Client->IsLightCulling() &&
-				FStatOverlay::IsAnyEnabled() &&
-				(FStatOverlay::IsEnabled(EStatFlags::Profile) ||
-				 FStatRegistry::Find(EditorStats::STAT_PickingTime))) {
+			FStatOverlay::IsAnyEnabled() &&
+			(FStatOverlay::IsEnabled(EStatFlags::Profile) ||
+				FStatOverlay::IsEnabled(EStatFlags::Decal) ||
+				FStatRegistry::Find(EditorStats::STAT_PickingTime))) {
 			ImGui::SameLine();
 			if (ImGui::SmallButton("Reset Stats"))
+			{
 				FStatRegistry::Reset();
+				Client->GetRenderData().DecalStats.ResetHistory();
+			}
 			StatResetButtonMin = ImGui::GetItemRectMin();
 			StatResetButtonMax = ImGui::GetItemRectMax();
 			bStatResetButtonVisible = true;
@@ -323,7 +329,7 @@ void FViewportsPanel::OnRender() {
 	for (int32 ViewIndex = 0; ViewIndex < 4; ++ViewIndex) {
 		if (ViewIndex != ActiveViewIndex)
 			continue;
-		FEditorViewportClient *Client = ViewportClients[ViewIndex].get();
+		FEditorViewportClient* Client = ViewportClients[ViewIndex].get();
 		if (!Client || !Client->IsActive() || Client->IsLightCulling())
 			continue;
 		DrawStatOverlay(DrawList, { ContentOrigin.x + Client->GetRect().X, ContentOrigin.y + Client->GetRect().Y }, Client);
@@ -349,26 +355,26 @@ void FViewportsPanel::DrawStatOverlay(ImDrawList* DrawList, const ImVec2& ViewMi
 	TArray<FStatLine> Lines;
 
 	if (FStatOverlay::IsEnabled(EStatFlags::FPS)) {
-		Lines.Add({"FPS", TitleColor});
+		Lines.Add({ "FPS", TitleColor });
 		Lines.Add(
-				{std::format("  {:.1f} fps", FStatOverlay::GetFPS()), ValueColor});
-		Lines.Add({std::format("  {:.2f} ms", FStatOverlay::GetFrameTimeMs()),
-			ValueColor});
+			{ std::format("  {:.1f} fps", FStatOverlay::GetFPS()), ValueColor });
+		Lines.Add({ std::format("  {:.2f} ms", FStatOverlay::GetFrameTimeMs()),
+			ValueColor });
 	}
 
 	if (FStatOverlay::IsEnabled(EStatFlags::Memory)) {
-		Lines.Add({"Memory", TitleColor});
-		Lines.Add({std::format("  Object  {:.2f} MB ({} allocs)",
+		Lines.Add({ "Memory", TitleColor });
+		Lines.Add({ std::format("  Object  {:.2f} MB ({} allocs)",
 			static_cast<double>(
 			FStatOverlay::GetObjectAllocationBytes()) /
 			BytesPerMegabyte,
 			FStatOverlay::GetObjectAllocationCount()),
-			ValueColor});
-		Lines.Add({std::format("  Process {:.2f} MB",
+			ValueColor });
+		Lines.Add({ std::format("  Process {:.2f} MB",
 			static_cast<double>(
 			FStatOverlay::GetProcessWorkingSetBytes()) /
 			BytesPerMegabyte),
-			ValueColor});
+			ValueColor });
 	}
 
 	struct FProfileStatLine {
@@ -378,13 +384,13 @@ void FViewportsPanel::DrawStatOverlay(ImDrawList* DrawList, const ImVec2& ViewMi
 	};
 	TArray<FProfileStatLine> ProfileLines;
 	if (FStatOverlay::IsEnabled(EStatFlags::Profile)) {
-		ProfileLines.Add({"CPU Profile (ms)", TitleColor, {"Last", "Avg", "Max"}});
+		ProfileLines.Add({ "CPU Profile (ms)", TitleColor,{ "Last", "Avg", "Max" } });
 
-		for (const auto &[Name, Data] : FStatRegistry::GetAll()) {
-			if (TStatId{Name} == EditorStats::STAT_PickingTime)
+		for (const auto& [Name, Data] : FStatRegistry::GetAll()) {
+			if (TStatId{ Name } == EditorStats::STAT_PickingTime)
 				continue;
 
-			FProfileStatLine Line{"  " + FString(Name), ValueColor};
+			FProfileStatLine Line{ "  " + FString(Name), ValueColor };
 			Line.Values[0] = std::format("{:.2f}", Data.GetLastMs());
 			Line.Values[1] = std::format("{:.2f}", Data.GetRecentAverageMs());
 			Line.Values[2] = std::format("{:.2f}", Data.GetMaxMs());
@@ -392,18 +398,18 @@ void FViewportsPanel::DrawStatOverlay(ImDrawList* DrawList, const ImVec2& ViewMi
 		}
 	}
 
-	if (const FCycleStatData *PickingData =
-					FStatRegistry::Find(EditorStats::STAT_PickingTime)) {
-		ProfileLines.Add({"Picking", TitleColor});
-		FProfileStatLine Line{"  Time (ms)", ValueColor};
+	if (const FCycleStatData* PickingData =
+		FStatRegistry::Find(EditorStats::STAT_PickingTime)) {
+		ProfileLines.Add({ "Picking", TitleColor });
+		FProfileStatLine Line{ "  Time (ms)", ValueColor };
 		Line.Values[0] = std::format("Last: {:.2f}", PickingData->GetLastMs());
 		Line.Values[1] = std::format("Attempts: {}", PickingData->CallCount);
 		Line.Values[2] = std::format("Acc.: {:.2f}", PickingData->GetTotalMs());
 		ProfileLines.Add(Line);
 	}
 
-FSceneRenderData& RenderData = Client->GetRenderData();
-const FRenderStats& Stats = RenderData.RenderStats;
+	FSceneRenderData& RenderData = Client->GetRenderData();
+	const FRenderStats& Stats = RenderData.RenderStats;
 	if (FStatOverlay::IsEnabled(EStatFlags::Light)) {
 		Lines.Add({ "Light", TitleColor });
 		Lines.Add({ std::format("  Total Lights {} ", Stats.DirectionalCount + Stats.PointCount + Stats.SpotCount), ValueColor });
@@ -470,33 +476,241 @@ const FRenderStats& Stats = RenderData.RenderStats;
 		}
 	}
 
+	if (FStatOverlay::IsEnabled(EStatFlags::Decal))
+	{
+		const FDecalStats& DecalStats = RenderData.DecalStats;
+		const FDecalFrameStats& Frame = DecalStats.Frame;
+
+		Lines.Add({ "Decal", TitleColor });
+
+		if (!Frame.bValid)
+		{
+			Lines.Add({
+				" Waiting for a successful view render",
+				ValueColor
+				});
+		}
+		else if (!Frame.bHasDBufferPasses)
+		{
+			Lines.Add({
+				" DBuffer path inactive",
+				ValueColor
+				});
+		}
+		else
+		{
+			const char* Method =
+				Frame.Method ==
+				EDecalRenderMethod::DepthReconstruction
+				? "Depth Reconstruction"
+				: "Mesh Re-rendering";
+			Lines.Add({
+				std::format(" Mode: {}", Method),
+				ValueColor
+				});
+
+			Lines.Add({
+				std::format(
+					" View: {} x {}",
+					Frame.Width,
+					Frame.Height),
+				ValueColor
+				});
+
+			Lines.Add({
+		   std::format(
+			   "  World / Eligible / Submitted: {} / {} / {}",
+			   Frame.WorldCount,
+			   Frame.EligibleCount,
+			   Frame.SubmittedLit + Frame.SubmittedUnlit),
+		   ValueColor
+				});
+
+			Lines.Add({
+				std::format(
+					"  Hidden / Rejected: {} / {}",
+					Frame.HiddenCount,
+					Frame.RenderDataRejected),
+				ValueColor
+				});
+
+			Lines.Add({
+				std::format(
+					"  Submitted Lit / Unlit: {} / {}",
+					Frame.SubmittedLit,
+					Frame.SubmittedUnlit),
+				ValueColor
+				});
+
+			Lines.Add({
+				std::format(
+					"  Receiver Batches / Items: {} / {}",
+					Frame.ReceiverBatchCount,
+					Frame.ReceiverItemCount),
+				ValueColor
+				});
+
+			Lines.Add({
+				std::format(
+					"  Draw Calls: {}",
+					Frame.DrawCalls),
+				ValueColor
+				});
+
+			Lines.Add({
+				std::format(
+					"  Submitted Triangles: {}",
+					Frame.SubmittedTriangles),
+				ValueColor
+				});
+
+			Lines.Add({
+				std::format(
+					"  DBuffer Logical Size: {:.2f} MiB",
+					static_cast<double>(Frame.DBufferBytes) /
+						(1024.0 * 1024.0)),
+				ValueColor
+				});
+
+			ProfileLines.Add({
+				"Decal CPU (ms)",
+				TitleColor,
+				{ "Last", "Avg120", "Max120" }
+				});
+
+			auto AddCpuLine =
+				[&](const char* Name, const FCycleStatData& History)
+				{
+					FProfileStatLine Line{
+						FString("  ") + Name,
+						ValueColor
+					};
+
+					Line.Values[0] =
+						std::format("{:.3f}", History.GetLastMs());
+
+					Line.Values[1] =
+						std::format(
+							"{:.3f}",
+							History.GetRecentAverageMs());
+
+					Line.Values[2] =
+						std::format(
+							"{:.3f}",
+							GetDecalRecentMaxMs(History));
+
+					ProfileLines.Add(Line);
+				};
+
+			AddCpuLine("Gather", DecalStats.GatherHistory);
+			AddCpuLine("Sort", DecalStats.SortHistory);
+			AddCpuLine("Submit", DecalStats.SubmitHistory);
+
+			ProfileLines.Add({
+				"Decal GPU incl. Clear (ms)",
+				TitleColor,
+				{ "Last", "Avg120", "Max120" }
+				});
+
+			auto AddGpuLine =
+				[&](const char* Name,
+					const std::shared_ptr<FGpuTimingHistory>& History)
+				{
+					FProfileStatLine Line{
+						FString("  ") + Name,
+						ValueColor
+					};
+
+					if (!History || History->Count == 0)
+					{
+						Line.Values[0] = "Pending";
+						Line.Values[1] = "-";
+						Line.Values[2] = "-";
+					}
+					else
+					{
+						Line.Values[0] =
+							std::format("{:.3f}", History->LastMs);
+
+						Line.Values[1] =
+							std::format(
+								"{:.3f}",
+								History->GetAverageMs());
+
+						Line.Values[2] =
+							std::format(
+								"{:.3f}",
+								History->GetMaxMs());
+					}
+
+					ProfileLines.Add(Line);
+				};
+
+			AddGpuLine("Lit", DecalStats.GpuLit);
+			AddGpuLine("Unlit", DecalStats.GpuUnlit);
+
+			if (DecalStats.GpuLit &&
+				DecalStats.GpuLit->Count != 0)
+			{
+				const uint64 CurrentFrame =
+					FGpuProfiler::Get().GetFrameId();
+
+				const uint64 SampleFrame =
+					DecalStats.GpuLit->LastFrameId;
+
+				Lines.Add({
+					std::format(
+						"  GPU Lit sample age: {} frames",
+						CurrentFrame - SampleFrame),
+					ValueColor
+					});
+			}
+
+			Lines.Add({
+				std::format(
+					"  GPU profiler skipped frames/scopes: {} / {}",
+					FGpuProfiler::Get().GetSkippedFrames(),
+					FGpuProfiler::Get().GetSkippedScopes()),
+				ValueColor
+				});
+
+			Lines.Add({
+				std::format(
+					"  GPU profiler errors: {}",
+					FGpuProfiler::Get().GetErrorCount()),
+				ValueColor
+				});
+		}
+	}
+
+
 	if (Lines.Num() == 0 && ProfileLines.Num() == 0)
 		return;
 
 	// 제어 위젯 한 줄 아래에서 시작해 Combo와 겹치지 않게 한다.
 	const float LineHeight = ImGui::GetTextLineHeight();
-	const ImVec2 Origin{ViewMin.x + StatOverlayMargin,
+	const ImVec2 Origin{ ViewMin.x + StatOverlayMargin,
 			ViewMin.y + StatOverlayMargin + ImGui::GetFrameHeight() +
-			StatOverlayMargin};
+			StatOverlayMargin };
 
 	// 최대 너비 계산
 	float MaxWidth = 0.0f;
 	for (int32 Index = 0; Index < Lines.Num(); ++Index)
 		MaxWidth =
-				std::max(MaxWidth, ImGui::CalcTextSize(Lines[Index].Text.c_str()).x);
+		std::max(MaxWidth, ImGui::CalcTextSize(Lines[Index].Text.c_str()).x);
 
 	const float MinValueWidth = ImGui::CalcTextSize("00000.00").x;
 	float NameWidth = 0.0f;
-	float ValueWidths[3] = {MinValueWidth, MinValueWidth, MinValueWidth};
+	float ValueWidths[3] = { MinValueWidth, MinValueWidth, MinValueWidth };
 	bool bHasColumns = false;
 
-	for (const FProfileStatLine &Line : ProfileLines) {
+	for (const FProfileStatLine& Line : ProfileLines) {
 		const float TextWidth = ImGui::CalcTextSize(Line.Text.c_str()).x;
 		bHasColumns = true;
 		NameWidth = std::max(NameWidth, TextWidth);
 		for (int32 Column = 0; Column < 3; ++Column)
 			ValueWidths[Column] = std::max(
-					MinValueWidth, ImGui::CalcTextSize(Line.Values[Column].c_str()).x);
+				MinValueWidth, ImGui::CalcTextSize(Line.Values[Column].c_str()).x);
 	}
 
 	float ColumnRight[3]{};
@@ -509,35 +723,35 @@ const FRenderStats& Stats = RenderData.RenderStats;
 		MaxWidth = std::max(MaxWidth, Width);
 	}
 
-	const ImVec2 BackgroundMin{Origin.x - StatOverlayPadding,
-			Origin.y - StatOverlayPadding};
+	const ImVec2 BackgroundMin{ Origin.x - StatOverlayPadding,
+			Origin.y - StatOverlayPadding };
 	const ImVec2 BackgroundMax{
 			Origin.x + MaxWidth + StatOverlayPadding,
 			Origin.y +
 					LineHeight * static_cast<float>(Lines.Num() + ProfileLines.Num()) +
-					StatOverlayPadding};
+					StatOverlayPadding };
 	DrawList->AddRectFilled(BackgroundMin, BackgroundMax,
-			StatOverlayBackgroundColor, 4.0f);
+		StatOverlayBackgroundColor, 4.0f);
 
 	// Lines 그리기
 	for (int32 Index = 0; Index < Lines.Num(); ++Index) {
 		DrawList->AddText(
-				{Origin.x, Origin.y + LineHeight * static_cast<float>(Index)},
-				Lines[Index].Color, Lines[Index].Text.c_str());
+			{ Origin.x, Origin.y + LineHeight * static_cast<float>(Index) },
+			Lines[Index].Color, Lines[Index].Text.c_str());
 	}
 
 	// ProfileLines 그리기
 	for (int32 Index = 0; Index < ProfileLines.Num(); ++Index) {
-		const FProfileStatLine &Line = ProfileLines[Index];
+		const FProfileStatLine& Line = ProfileLines[Index];
 		const float Y =
-				Origin.y + LineHeight * static_cast<float>(Lines.Num() + Index);
-		DrawList->AddText({Origin.x, Y}, Line.Color, Line.Text.c_str());
+			Origin.y + LineHeight * static_cast<float>(Lines.Num() + Index);
+		DrawList->AddText({ Origin.x, Y }, Line.Color, Line.Text.c_str());
 
 		for (int32 Column = 0; Column < 3; ++Column) {
-			const FString &Text = Line.Values[Column];
+			const FString& Text = Line.Values[Column];
 			const float TextWidth = ImGui::CalcTextSize(Text.c_str()).x;
-			DrawList->AddText({ColumnRight[Column] - TextWidth, Y}, Line.Color,
-			Text.c_str());
+			DrawList->AddText({ ColumnRight[Column] - TextWidth, Y }, Line.Color,
+				Text.c_str());
 		}
 	}
 }

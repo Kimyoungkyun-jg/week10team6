@@ -9,6 +9,7 @@ class UActorComponent;
 struct FLuaActorRef
 {
 	UWorld* World = nullptr;
+	uint32 WorldUUID = 0;
 	AActor* Ptr = nullptr;
 	uint32 UUID = 0;
 
@@ -21,6 +22,7 @@ struct FLuaActorRef
 struct FLuaComponentRef
 {
 	UWorld* World = nullptr;
+	uint32 WorldUUID = 0;
 	AActor* Owner = nullptr;
 	UActorComponent* Ptr = nullptr;
 	uint32 UUID = 0;

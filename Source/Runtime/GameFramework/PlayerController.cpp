@@ -1,8 +1,10 @@
 #include "EnginePCH.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/DefaultPawn.h"
 #include "Camera/PlayerCameraManager.h" 
 #include "Engine/World.h"               
+#include "GameFramework/GameMode.h"
 #include "Camera/CameraShakeBase.h"
 #include "Curves/CurveFloat.h"
 #include <cstring>
@@ -22,6 +24,12 @@ void APlayerController::Tick(float DeltaTime)
 void APlayerController::ProcessPlayerInput(float DeltaTime)
 {
 	if (!PossessedPawn) return;
+	if (GetWorld() && (GetWorld()->IsPaused() ||
+		(GetWorld()->GetGameMode() && !GetWorld()->GetGameMode()->AllowsPlayerControllerInput())))
+	{
+		MouseAxisX = MouseAxisY = 0.0f;
+		return;
+	}
 	const float Forward = static_cast<float>(bKeyDown[static_cast<int32>(EKeyCode::W)]) -
 		static_cast<float>(bKeyDown[static_cast<int32>(EKeyCode::S)]);
 	const float Right = static_cast<float>(bKeyDown[static_cast<int32>(EKeyCode::D)]) -
@@ -39,8 +47,14 @@ void APlayerController::ProcessPlayerInput(float DeltaTime)
 	}
 	MouseAxisX = MouseAxisY = 0.0f;
 	const FQuat Rotation = PossessedPawn->GetActorRotation().Quaternion();
-	if (Forward != 0.0f) PossessedPawn->AddMovementInput(Rotation.GetForwardVector(), Forward * DeltaTime);
-	if (Right != 0.0f) PossessedPawn->AddMovementInput(Rotation.GetRightVector(), Right * DeltaTime);
+	if (Forward != 0.0f) PossessedPawn->AddMovementInput(Rotation.GetForwardVector(), Forward);
+	if (Right != 0.0f) PossessedPawn->AddMovementInput(Rotation.GetRightVector(), Right);
+	if (ADefaultPawn* DefaultPawn = Cast<ADefaultPawn>(PossessedPawn))
+	{
+		const float Up = static_cast<float>(bKeyDown[static_cast<int32>(EKeyCode::E)]) -
+			static_cast<float>(bKeyDown[static_cast<int32>(EKeyCode::Q)]);
+		if (Up != 0.0f) DefaultPawn->AddMovementInput(FVector(0.0f, 0.0f, 1.0f), Up);
+	}
 }
 
 void APlayerController::Possess(APawn* InPawn)
@@ -60,6 +74,7 @@ void APlayerController::UnPossess()
 {
 	if (PossessedPawn) PossessedPawn->UnPossessed();
 	PossessedPawn = nullptr;
+	if (PlayerCameraManager) PlayerCameraManager->SetViewTarget(nullptr);
 }
 
 void APlayerController::InputKey(int32 Key, bool bDown)
@@ -67,6 +82,13 @@ void APlayerController::InputKey(int32 Key, bool bDown)
 	if (Key < 0 || Key >= 256) return;
 	const bool bJustPressed = bDown && !bKeyDown[Key];
 	bKeyDown[Key] = bDown;
+	if (Key == static_cast<int32>(EKeyCode::Space) && PossessedPawn)
+	{
+		if (!bDown) PossessedPawn->StopJumping();
+		else if (bJustPressed && GetWorld() && !GetWorld()->IsPaused() &&
+			(!GetWorld()->GetGameMode() || GetWorld()->GetGameMode()->AllowsPlayerControllerInput()))
+			PossessedPawn->Jump();
+	}
 	if (!bJustPressed || !PlayerCameraManager) return;
 
 	if (Key == static_cast<int32>(EKeyCode::F6))
@@ -119,6 +141,7 @@ void APlayerController::InputAxis(EGameInputAxis Axis, float Delta)
 
 void APlayerController::ClearInputState()
 {
+	if (PossessedPawn) { PossessedPawn->StopJumping(); PossessedPawn->ConsumeMovementInputVector(); }
 	std::memset(bKeyDown, 0, sizeof(bKeyDown));
 	MouseAxisX = MouseAxisY = 0.0f;
 }

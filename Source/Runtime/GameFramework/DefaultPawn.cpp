@@ -6,6 +6,8 @@
 
 ADefaultPawn::ADefaultPawn()
 {
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.TickGroup = ETickingGroup::PostPhysics;
 	SetActorEnableCollision(false);
 	CameraComponent = CreateDefaultSubobject<UCameraComponent>("CameraComponent");
 	StaticMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>("StaticMeshComponent");
@@ -17,10 +19,17 @@ ADefaultPawn::ADefaultPawn()
 	CameraComponent->SetExternalInputManaged(true);
 }
 
+void ADefaultPawn::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+	const FVector Input = ConsumeMovementInputVector().GetClampedToMaxSize(1.0f);
+	if (GetRootComponent() && Input.SizeSquared() > SMALL_NUMBER)
+		GetRootComponent()->SetRelativeLocation(GetActorLocation() + Input * (MoveSpeed * DeltaTime));
+}
+
 void ADefaultPawn::AddMovementInput(const FVector& WorldDirection, float ScaleValue)
 {
-	if (GetRootComponent())
-		GetRootComponent()->SetRelativeLocation(GetActorLocation() + WorldDirection * (ScaleValue * MoveSpeed));
+	Super::AddMovementInput(WorldDirection, ScaleValue);
 }
 
 void ADefaultPawn::AddControllerYawInput(float Value)

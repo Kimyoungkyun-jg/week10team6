@@ -21,6 +21,8 @@ class ULevel;
 class UBillboardComponent;
 class APawn;
 class APlayerController;
+class AGameMode;
+class AGameHUD;
 
 struct FViewContext;
 
@@ -77,6 +79,8 @@ public:
 	int32 GetActorNum();
 
 	bool DestroyActor(AActor* Actor);
+	void QueueObjectDeletion(UObject* Object);
+	void FlushPendingDestruction();
 
 	// View별 Billboard 행렬 공급자는 이 동기 호출 동안만 사용하며 저장하지 않는다.
 	using FBillboardTraceTransform = FMatrix(*)(const UBillboardComponent&, const void*);
@@ -92,6 +96,19 @@ public:
 	bool HasBegunPlay() const { return bBegunPlay; }
 	APawn* GetPlayerPawn() const { return PlayerPawn; }
 	APlayerController* GetPlayerController() const { return PlayerController; }
+	AGameMode* GetGameMode() const { return GameMode; }
+	AGameHUD* GetHUD() const { return HUD; }
+	UClass* GetDefaultPawnClass() const;
+	UClass* GetPlayerControllerClass() const;
+	UClass* GetHUDClass() const;
+	const FString& GetGameModeClassName() const { return GameModeClassName; }
+	const FString& GetPlayerPawnClassName() const { return PlayerPawnClassName; }
+	const FString& GetPlayerControllerClassName() const { return PlayerControllerClassName; }
+	const FString& GetHUDClassName() const { return HUDClassName; }
+	bool SetGameModeClass(UClass* Class);
+	bool SetPlayerPawnClass(UClass* Class);
+	bool SetPlayerControllerClass(UClass* Class);
+	bool SetHUDClass(UClass* Class);
 	bool IsPaused() const { return bIsPaused; }
 	void SetPaused(bool bPaused) { bIsPaused = bPaused; }
 
@@ -143,11 +160,27 @@ private:
 	FTickTaskManager TickTaskManager;
 
 	TQueue<AActor*> BeginPlayList;
+	TArray<UObject*> PendingDeletion;
+	bool bIsTicking = false;
+	bool bIsClearingWorld = false;
+	bool bFlushingDestruction = false;
+	int32 ActiveObjectCalls = 0;
 
 	//메인 카메라 
 	ACameraActor* MainCamera = nullptr;
 	APawn* PlayerPawn = nullptr;
 	APlayerController* PlayerController = nullptr;
+	AGameMode* GameMode = nullptr;
+	AGameHUD* HUD = nullptr;
+
+	UPROPERTY(EditAnywhere)
+	FString GameModeClassName = "AGameMode";
+	UPROPERTY(EditAnywhere)
+	FString PlayerPawnClassName;
+	UPROPERTY(EditAnywhere)
+	FString PlayerControllerClassName;
+	UPROPERTY(EditAnywhere)
+	FString HUDClassName;
 	bool bIsPaused = false;
 	bool bBegunPlay = false;
 

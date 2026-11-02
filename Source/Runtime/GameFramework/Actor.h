@@ -52,6 +52,8 @@ public:
 	bool TryGetActorBounds(FBox& OutBounds) const;
 
 	bool Destroy();
+	bool IsActorBeingDestroyed() const { return bActorIsBeingDestroyed; }
+	void EndPlayActor();
 	
 	//xx삭제 예정
 	friend class UWorld;
@@ -101,5 +103,8 @@ private:
 	UPROPERTY(EditAnywhere)
 	bool bActorEnableCollision = true;
 	bool bHasBegunPlay = false;
+	bool bHasEndedPlay = false;
+	bool bIsEndingPlay = false;
+	bool bActorIsBeingDestroyed = false;
 
 };

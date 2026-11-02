@@ -7,6 +7,7 @@
 class APawn;
 class APlayerCameraManager;
 class UCurveFloat;
+class AGameHUD;
 
 UCLASS()
 class APlayerController : public AActor
@@ -19,6 +20,8 @@ public:
 	void Possess(APawn* InPawn);
 	void UnPossess();
 	APawn* GetPawn() const { return PossessedPawn; }
+	AGameHUD* GetHUD() const { return HUD; }
+	void SetHUD(AGameHUD* InHUD) { HUD = InHUD; }
 	void InputKey(int32 Key, bool bDown);
 	void InputAxis(EGameInputAxis Axis, float Delta);
 	void ClearInputState();
@@ -33,6 +36,7 @@ private:
 
 	APlayerCameraManager* PlayerCameraManager = nullptr;
 	APawn* PossessedPawn = nullptr;
+	AGameHUD* HUD = nullptr;
 	bool bKeyDown[256]{};
 	float MouseAxisX = 0.0f;
 	float MouseAxisY = 0.0f;

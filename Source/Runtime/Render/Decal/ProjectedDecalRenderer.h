@@ -24,12 +24,7 @@ public:
 	// 렌더 타깃 설정과 Clear는 RenderGraphs가 담당한다.
 	bool OnRender(
 		std::span<const FMeshDrawBatch> ReceiverBatches,
-		const FProjectedDecalTestSettings& Settings);
-
-	// 컴포넌트 연결 전까지 사용할 임시 테스트 설정.
-	FProjectedDecalTestSettings& GetTestSettings() { return TestSettings; }
-	const FProjectedDecalTestSettings& GetTestSettings() const { return TestSettings; }
-
+		std::span<const FProjectedDecalRenderData> Decals);
 private:
 	bool CreateTestTexture();
 
@@ -41,6 +36,4 @@ private:
 
 	TUniquePtr<FConstantBuffer> ConstantBuffer;
 	TUniquePtr<FTexture2D> TestTexture;
-
-	FProjectedDecalTestSettings TestSettings;
 };

@@ -4,22 +4,18 @@
 #include "Math/Vector.h"
 #include "Math/Vector4.h"
 #include "Math/Transform.h"
-
-struct FProjectedDecalTestSettings
+// 컴포넌트에서 복사한 이번 뷰의 렌더입력
+// 컴포넌트 자체의 포인터는 보관하지 않는다.
+struct FProjectedDecalRenderData
 {
-	bool bEnabled = true;
+	FMatrix DecalToWorld = FMatrix::Identity;
 
-	// 월드 공간에서의 위치, 회전, 크기
-	// Location: 데칼 볼륨의 중심
-	// Rotation: 로컬 +X 축이 투영 방향
-	// Scale.X: 투영 깊이
-	// Scale.Y: 이미지 너비
-	// Scale.Z: 이미지 높이
-	// 로컬 볼륨은 XYZ 모두 [-0.5, +0.5]
-	FTransform Transform = FTransform::Identity;
+	FVector4 TintOpacity = FVector4(1.0f, 1.0f, 1.0f, 1.0f);
 
-	// rgb: 색상, a: 불투명도
-	FVector4 TintOpacity = FVector4(1.0f, 1.0f, 1.0f, 1.0f); 
+	// 작은값부터 그린다. 큰 값이 나중에 덮인다.
+	int32 SortOrder = 0;
+	// 같은 SortOrder에서 실행 중 순서를 고정하는 용도.
+	uint32 ComponentID = 0;
 };
 
 struct alignas(16) FProjectedDecalConstants
@@ -30,25 +26,35 @@ struct alignas(16) FProjectedDecalConstants
 
 // 양수 스케일만 허용한다.
 // 0에 가까운 스케일은 역행렬 계산 문제를 피하기 위해 제외한다.
-inline bool IsValidProjectedDecalTransform(
-	const FProjectedDecalTestSettings& Settings)
+inline bool IsValidProjectedDecalRenderData(
+	const FProjectedDecalRenderData& Data)
 {
-	constexpr float MinScale = 0.0001f;
+	for (int32 Row = 0; Row < 4; ++Row)
+	{
+		for (int32 Column = 0; Column < 4; ++Column)
+		{
+			if (!std::isfinite(
+				Data.DecalToWorld.M[Row][Column]))
+			{
+				return false;
+			}
+		}
+	}
 
-	const FVector& Scale = Settings.Transform.Scale;
+	const float Determinant = Data.DecalToWorld.Determinant();
 
-	return Scale.X >= MinScale && Scale.Y >= MinScale && Scale.Z >= MinScale;
+	return
+		std::isfinite(Determinant) &&
+		std::abs(Determinant) > 1e-12f;
 }
 
 // 호출전에 valid 검사 필요
 inline FProjectedDecalConstants MakeProjectedDecalConstants(
-	const FProjectedDecalTestSettings& Settings)
+	const FProjectedDecalRenderData& Data)
 {
-	FMatrix DecalToWorld = Settings.Transform.GetLocalMatrix();
-
 	FProjectedDecalConstants Constants{};
-	Constants.WorldToDecal = DecalToWorld.Inverse();
-	Constants.TintOpacity = Settings.TintOpacity;
+	Constants.WorldToDecal = Data.DecalToWorld.Inverse();
+	Constants.TintOpacity = Data.TintOpacity;
 
 	return Constants;
 }

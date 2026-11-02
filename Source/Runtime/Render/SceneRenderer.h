@@ -7,6 +7,7 @@
 #include "Render/SceneRenderData.h"
 #include "Render/SceneRenderOptions.h"
 #include "Render/RenderGraph/RenderGraph.h"
+#include "Render/Decal/ProjectedDecal.h"
 
 class UWorld;
 class FScene;
@@ -108,6 +109,7 @@ private:
 	bool HasVisibleReceiverInBounds(const FLightSceneInfo* LightSceneInfo) const;
 	// 그림자마다 Caster를 모으고, Caster가 없는 그림자는 버린다.
 	void GatherShadowPrimitives();
+	void GatherProjectedDecals();
 	void AddInteractingPrimitives(FScene& Scene, FProjectedShadowInfo& Shadow);
 	// 남은 그림자를 깊이 아틀라스(Texture2DArray)에 배치한다.
 	void AllocateShadowDepthTargets();
@@ -131,6 +133,7 @@ private:
 		uint32 Channel = 0;                     // ScreenShadowMask 채널
 	};
 	TArray<FShadowedLight> ShadowedLights;
+	TArray<FProjectedDecalRenderData> VisibleDecals;
 
 	bool RenderHeightFog(FRenderer* Renderer, FTexture2D* DepthTarget, FTexture2D* ColorTarget);
 	void RenderSceneText(FRenderer* Renderer);

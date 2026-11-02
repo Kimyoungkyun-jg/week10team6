@@ -48,19 +48,6 @@ bool FProjectedDecalRenderer::Init(FRenderer* InRenderer)
 		return false;
 	}
 
-	// 임시 테스트 설정
-	TestSettings.Transform.Location =
-		FVector(0.0f, 0.0f, 0.0f);
-
-	TestSettings.Transform.Rotation =
-		FRotator(0.0f, 0.0f, 0.0f);
-
-	TestSettings.Transform.Scale =
-		FVector(5.0f, 10.0f, 10.0f);
-
-	TestSettings.TintOpacity =
-		FVector4(1.0f, 1.0f, 1.0f, 0.8f);
-
 	return IsReady();
 }
 
@@ -69,6 +56,7 @@ bool FProjectedDecalRenderer::IsReady() const
 	return
 		Renderer &&
 		PipelineState.Shader &&
+		PipelineState.Shader->VertexShader &&
 		PipelineState.Shader->PixelShader &&
 		ConstantBuffer &&
 		ConstantBuffer->GetBuffer() &&
@@ -141,18 +129,16 @@ bool FProjectedDecalRenderer::CreateTestTexture()
 
 bool FProjectedDecalRenderer::OnRender(
 	std::span<const FMeshDrawBatch> ReceiverBatches,
-	const FProjectedDecalTestSettings& Settings)
+	std::span<const FProjectedDecalRenderData> Decals)
 {
 	// 그릴 것이 없는 것은 정상적인 성공으로 취급한다.
-	if (!Settings.bEnabled ||
-		Settings.TintOpacity.W <= 0.0f ||
+	if (Decals.empty() ||
 		ReceiverBatches.empty())
 	{
 		return true;
 	}
 
-	if (!IsReady() ||
-		!IsValidProjectedDecalTransform(Settings))
+	if (!IsReady())
 	{
 		return false;
 	}
@@ -170,14 +156,7 @@ bool FProjectedDecalRenderer::OnRender(
 		}
 	}
 
-	const FProjectedDecalConstants Constants =
-		MakeProjectedDecalConstants(Settings);
-
-	RenderCommand::UpdateBufferData(
-		ConstantBuffer.get(),
-		&Constants,
-		sizeof(Constants));
-
+	// 현재는 모든 데칼이 같은 테스트 패턴을 사용한다.
 	RenderCommand::BindConstantBuffer(
 		4,
 		ConstantBuffer.get(),
@@ -189,46 +168,57 @@ bool FProjectedDecalRenderer::OnRender(
 		TestTexture.get(),
 		EShaderBindFlagBits::Pixel);
 
-	for (const FMeshDrawBatch& SourceBatch : ReceiverBatches)
+	// SortOrder로 정렬된 순서.
+	for (const FProjectedDecalRenderData& Decal : Decals)
 	{
-		if (SourceBatch.Items.IsEmpty())
+		if (!IsValidProjectedDecalRenderData(Decal))
 			continue;
 
-		FMeshDrawBatch Batch = SourceBatch;
+		const FProjectedDecalConstants Constants =
+			MakeProjectedDecalConstants(Decal);
 
-		// Prepass와 같은 VS를 사용한다.
-		// Lambert VS의 TEXCOORD1이 월드 위치.
-		//FShaderProgram DecalProgram(
-		//	SourceBatch.Pipeline.Shader->VertexShader,
-		//	PipelineState.Shader->PixelShader);
+		RenderCommand::UpdateBufferData(
+			ConstantBuffer.get(),
+			&Constants,
+			sizeof(Constants));
 
-		Batch.Pipeline = PipelineState;
-		//Batch.Pipeline.Shader = &DecalProgram;
 
-		// 원본 표면과 같은 컬링, 래스터 규칙을 유지한다.
-		Batch.Pipeline.RasterizerState =
-			SourceBatch.Pipeline.RasterizerState;
+		for (const FMeshDrawBatch& SourceBatch : ReceiverBatches)
+		{
+			if (SourceBatch.Items.IsEmpty())
+				continue;
 
-		Batch.bForceWireframe = false;
+			FMeshDrawBatch Batch = SourceBatch;
 
-		Batch.bBindViewConstants = false;
-		Batch.bUseObjectSlots = false;
+			Batch.Pipeline = PipelineState;
 
-		Batch.ObjectBindingSlot = 0;
-		Batch.ObjectStages =
-			EShaderBindFlagBits::Vertex |
-			EShaderBindFlagBits::Pixel;
+			// 원본 표면과 같은 컬링, 래스터 규칙을 유지한다.
+			Batch.Pipeline.RasterizerState =
+				SourceBatch.Pipeline.RasterizerState;
 
-		// 원래 재질 텍스처가 데칼 t0를 덮어쓰지 않게 한다.
-		Batch.Textures.Reset();
+			Batch.bForceWireframe = false;
 
-		Batch.Sampler = ESamplerState::LinearClamp;
-		Batch.SamplerStages = EShaderBindFlagBits::Pixel;
+			Batch.bBindViewConstants = false;
+			Batch.bUseObjectSlots = false;
 
-		// 원본 MaterialData는 유지한다.
-		// 재사용하는 VS의 UVTransform 등도 기존 값으로 바인딩한다.
-		Renderer->DrawMeshes(
-			std::span<const FMeshDrawBatch>(&Batch, 1));
+			Batch.ObjectBindingSlot = 0;
+			Batch.ObjectStages =
+				EShaderBindFlagBits::Vertex;
+
+			// 전용 데칼 셰이더는 원래 재질 상수를 사용하지 않는다.
+			Batch.MaterialDataSize = 0;
+
+			// 원래 재질 텍스처가 데칼 t0를 덮어쓰지 않게 한다.
+			Batch.Textures.Reset();
+
+			Batch.Sampler = ESamplerState::LinearClamp;
+			Batch.SamplerStages = EShaderBindFlagBits::Pixel;
+
+			// 원본 MaterialData는 유지한다.
+			// 재사용하는 VS의 UVTransform 등도 기존 값으로 바인딩한다.
+			Renderer->DrawMeshes(
+				std::span<const FMeshDrawBatch>(&Batch, 1));
+		}
 	}
 
 	RenderCommand::BindConstantBuffer(

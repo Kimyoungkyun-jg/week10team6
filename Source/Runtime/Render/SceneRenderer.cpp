@@ -14,6 +14,7 @@
 #include "Render/SkyLightEnvironment.h"
 #include "Engine/SceneManagement.h"
 #include "Components/ExponentialHeightFogComponent.h"
+#include "Components/DecalComponent.h"
 #include "Render/PostProcess/HeightFogRenderer.h"
 #include "Render/PostProcess/CameraOverlayRenderer.h"
 #include "Render/PostProcess/FXAARenderer.h"
@@ -512,25 +513,23 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 		}
 
 		// 데칼 패스 확인
+		GatherProjectedDecals();
 		FProjectedDecalRenderer* DecalRenderer = Renderer->GetProjectedDecal();
 		
 		// 그래프 실행 중 설정이 바뀌어도 이번 뷰는 같은 값을 사용한다.
-		const FProjectedDecalTestSettings DecalSettings =
-			DecalRenderer
-			? DecalRenderer->GetTestSettings()
-			: FProjectedDecalTestSettings{};
+		//const FProjectedDecalTestSettings DecalSettings =
+		//	DecalRenderer
+		//	? DecalRenderer->GetTestSettings()
+		//	: FProjectedDecalTestSettings{};
 
 		const bool bNeedsDBuffer =
-			DecalRenderer &&
-			DecalSettings.bEnabled &&
-			DecalSettings.TintOpacity.W > 0.0f &&
 			Options.bDrawPrimitives &&
 			!View.bIsWireframe &&
-			!ForwardBatches.IsEmpty();
+			!ForwardBatches.IsEmpty() &&
+			!VisibleDecals.IsEmpty();
 
 		if (bNeedsDBuffer &&
-			(!DecalRenderer->IsReady() ||
-				!IsValidProjectedDecalTransform(DecalSettings)))
+			(!DecalRenderer || !DecalRenderer->IsReady()))
 		{
 			return false;
 		}
@@ -660,7 +659,6 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 				[
 					this,
 					DecalRenderer,
-					DecalSettings,
 					bNeedsDBuffer
 				]
 				{
@@ -670,7 +668,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					bCorePassSucceeded =
 						DecalRenderer->OnRender(
 							ForwardBatches,
-							DecalSettings);
+							VisibleDecals);
 				}))
 			{
 				return false;
@@ -1184,4 +1182,48 @@ void FSceneRenderer::PrepareDrawData(FRenderer* Renderer, const FSceneRenderData
 				&Data.ObjectConstants[Index], sizeof(FPerObjectConstants));
 		Renderer->EndObjectConstants();
 	}
+}
+
+void FSceneRenderer::GatherProjectedDecals()
+{
+	VisibleDecals.Reset();
+
+	if (!World)
+		return;
+
+	for (TObjectIterator<UDecalComponent> It; It; ++It)
+	{
+		UDecalComponent* Component = *It;
+
+		if (!Component ||
+			!Component->IsRegistered() ||
+			!Component->IsShown(View.bGameView))
+		{
+			continue;
+		}
+
+		AActor* Owner = Component->GetOwner();
+
+		if (!Owner || Owner->GetWorld() != World)
+		{
+			continue;
+		}
+
+		FProjectedDecalRenderData Data{};
+
+		if (!Component->TryGetRenderData(Data))
+			continue;
+
+		VisibleDecals.Add(Data);
+	}
+
+	std::sort(
+		VisibleDecals.begin(),
+		VisibleDecals.end(),
+		[](const auto& A, const auto& B)
+		{
+			if (A.SortOrder != B.SortOrder)
+				return A.SortOrder < B.SortOrder;
+			return A.ComponentID < B.ComponentID;
+		});
 }

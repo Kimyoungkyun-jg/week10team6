@@ -17,6 +17,7 @@ class FFXAARenderer;
 class FCameraOverlayRenderer;
 
 class FTextRenderer;
+class FProjectedDecalRenderer;
 
 class FRenderer
 {
@@ -48,6 +49,7 @@ public:
 	FFXAARenderer* GetFXAA() const { return FXAA.get(); }
 	FCameraOverlayRenderer* GetCameraOverlay() const { return CameraOverlay.get(); }
 	FTextRenderer* GetSceneText() const { return SceneText.get(); }
+	FProjectedDecalRenderer* GetProjectedDecal() const { return ProjectedDecal.get(); }
 
 	FConstantBuffer* GetToneMapConstants() const { return ToneMapConstants.get(); }
 	
@@ -71,4 +73,5 @@ private:
 	TUniquePtr<FFXAARenderer> FXAA;
 	TUniquePtr<FCameraOverlayRenderer> CameraOverlay;
 	TUniquePtr<FTextRenderer> SceneText;
+	TUniquePtr<FProjectedDecalRenderer> ProjectedDecal;
 };

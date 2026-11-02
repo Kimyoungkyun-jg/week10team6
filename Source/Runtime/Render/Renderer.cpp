@@ -10,6 +10,7 @@
 #include "Render/PostProcess/FXAARenderer.h"
 #include "Render/PostProcess/ToneMapData.h"
 #include "Render/PostProcess/CameraOverlayRenderer.h"
+#include "Render/Decal/ProjectedDecalRenderer.h"
 #include "Text/TextRenderer.h"
 
 namespace
@@ -147,6 +148,14 @@ void FRenderer::InitScenePasses(const FString& SkyPanoramaPath)
 	ToneMapConstants = RenderCommand::CreateConstantBuffer(sizeof(FToneMapData));
 	SceneText = MakeUnique<FTextRenderer>();
 	SceneText->Init();
+	ProjectedDecal = MakeUnique<FProjectedDecalRenderer>();
+
+	if (!ProjectedDecal->Init(this))
+	{
+		HTR_LOG(Error, "Projected decal renderer init failed");
+		ProjectedDecal.reset();
+	}
+
 }
 
 FOcclusionMeasureResult FRenderer::MeasureDrawVisibility(std::span<const FMeshDrawBatch> Batches)

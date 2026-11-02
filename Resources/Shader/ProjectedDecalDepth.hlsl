@@ -42,7 +42,7 @@ float4 mainPS(VS_OUT Input) : SV_Target0
     int2 Pixel = int2(Input.Position.xy);
     
     float Depth =
-    SceneDepthTexture.Load(int3(Pixel, 0)));
+    SceneDepthTexture.Load(int3(Pixel, 0));
     
     // 현재 엔진의 깊이 Clear 값은 1.
     // 배경은 데칼을 받지 않는다.
@@ -70,6 +70,6 @@ float4 mainPS(VS_OUT Input) : SV_Target0
     
     float3 WorldPosition = WorldPositionH.xyz / WorldPositionH.w;
     
-    return EvaluateAttributeAtCentroid(WorldPosition);
+    return EvaluateProjectedDecal(WorldPosition);
 
 }

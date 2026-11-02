@@ -31,6 +31,7 @@ enum class EPSOType : uint8
 	ShadowProjection,        // 그림자 한 장을 화면 마스크(ScreenShadowMask)에 그린다
 	ShadowMaskVisualize,     // Shadow Mask 뷰 모드: 마스크를 화면에 띄운다
 	StaticMesh_DBufferDecal,
+	DBufferDecal_DepthReconstruction,
 	Count
 };
 

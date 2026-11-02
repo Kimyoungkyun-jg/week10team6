@@ -9,6 +9,7 @@
 
 class FRenderer;
 struct FMeshDrawBatch;
+struct FSceneView;
 
 class FProjectedDecalRenderer
 {
@@ -22,8 +23,15 @@ public:
 	// 2. Prepass Detpth가 DSV로 바인딩되어 있다.
 	//
 	// 렌더 타깃 설정과 Clear는 RenderGraphs가 담당한다.
-	bool OnRender(
+	bool OnRenderMesh(
 		std::span<const FMeshDrawBatch> ReceiverBatches,
+		std::span<const FProjectedDecalRenderData> Decals,
+		bool bUnlitPass);
+
+	bool OnRenderDepth(
+		const FSceneView& View,
+		uint32 Width,
+		uint32 Height,
 		std::span<const FProjectedDecalRenderData> Decals,
 		bool bUnlitPass);
 private:
@@ -31,7 +39,9 @@ private:
 	FRenderer* Renderer = nullptr;
 
 	// PSO
-	FPipelineState PipelineState;
+	FPipelineState MeshPipelineState;
+	FPipelineState DepthPipelineState;
 
 	TUniquePtr<FConstantBuffer> ConstantBuffer;
+	TUniquePtr<FConstantBuffer> DepthViewConstantBuffer;
 };

@@ -45,6 +45,12 @@ struct alignas(16) FProjectedDecalConstants
 	FVector4 TextureParams;
 };
 
+struct alignas(16) FProjectedDecalDepthViewConstants
+{
+	FMatrix InverseViewProjection;
+	FVector4 ViewportSize;
+};
+
 // 양수 스케일만 허용한다.
 // 0에 가까운 스케일은 역행렬 계산 문제를 피하기 위해 제외한다.
 inline bool IsValidProjectedDecalRenderData(

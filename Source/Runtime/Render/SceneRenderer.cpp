@@ -640,91 +640,80 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 				return false;
 		}
 
-		// 데칼 lit 패스
+		// 데칼 패스
 		{
-			FRenderGraphRasterPassDesc DecalPass{};
-			DecalPass.Name = "DBufferLit";
-
-			DecalPass.ColorAttachments = {
+			const bool bUseDepthReconstruction =
+				Options.DecalRenderMethod == EDecalRenderMethod::DepthReconstruction;
+			auto AddDecalPass =
+				[&](FRenderGraphTextureRef Output, bool bUnlitPass)
 				{
-					DBufferLit,
-					ERenderGraphLoadAction::Clear,
-					{ 0.0f, 0.0f, 0.0f, 0.0f }
-				}
-			};
+					FRenderGraphRasterPassDesc DecalPass{};
+					DecalPass.Name = bUnlitPass ? "DBufferUnlit" : "DBufferLit";
+					DecalPass.ColorAttachments = {
+						{
+							Output,
+							ERenderGraphLoadAction::Clear,
+							{ 0.0f, 0.0f, 0.0f, 0.0f }
+						}
+					};
+					if (bNeedsDBuffer)
+					{
+						if (bUseDepthReconstruction)
+						{
+							// Depth는 입력으로만 사용한다.
+							DecalPass.ReadTextures = { Depth };
+							DecalPass.ReadTextureStartSlot = 1;
+						}
+						else
+						{
+							// 메시 방식은 Depth Equal 검사에 사용한다.
+							DecalPass.DepthAttachment = {
+								Depth,
+								ERenderGraphLoadAction::Load,
+								1.0f, 0
+							};
+						}
+					}
+					return Graph.AddRasterPass(
+						std::move(DecalPass),
+						[
+							this,
+							DecalRenderer,
+							bNeedsDBuffer,
+							bUseDepthReconstruction,
+							bUnlitPass,
+							Width,
+							Height
+						]
+						{
+							if (!bCorePassSucceeded || !bNeedsDBuffer)
+								return;
 
-			if (bNeedsDBuffer)
-			{
-				DecalPass.DepthAttachment = {
-					Depth,
-					ERenderGraphLoadAction::Load,
-					1.0f, 0
+							if (bUseDepthReconstruction)
+							{
+								bCorePassSucceeded =
+									DecalRenderer->OnRenderDepth(
+										View,
+										Width,
+										Height,
+										VisibleDecals,
+										bUnlitPass);
+							}
+							else
+							{
+								bCorePassSucceeded =
+									DecalRenderer->OnRenderMesh(
+										ForwardBatches,
+										VisibleDecals,
+										bUnlitPass);
+							}
+						});
 				};
-			}
 
-			if (!Graph.AddRasterPass(
-				std::move(DecalPass),
-				[
-					this,
-					DecalRenderer,
-					bNeedsDBuffer
-				]
-				{
-					if (!bCorePassSucceeded || !bNeedsDBuffer)
-						return;
-
-					bCorePassSucceeded =
-						DecalRenderer->OnRender(
-							ForwardBatches,
-							VisibleDecals,
-							false);
-				}))
-			{
+			if (!AddDecalPass(DBufferLit, false))
 				return false;
-			}
-		}
-		// 데칼 unlit 패스
-		{
-			FRenderGraphRasterPassDesc DecalPass{};
-			DecalPass.Name = "DBufferUnlit";
-
-			DecalPass.ColorAttachments = {
-				{
-					DBufferUnlit,
-					ERenderGraphLoadAction::Clear,
-					{ 0.0f, 0.0f, 0.0f, 0.0f }
-				}
-			};
-
-			if (bNeedsDBuffer)
-			{
-				DecalPass.DepthAttachment = {
-					Depth,
-					ERenderGraphLoadAction::Load,
-					1.0f, 0
-				};
-			}
-
-			if (!Graph.AddRasterPass(
-				std::move(DecalPass),
-				[
-					this,
-					DecalRenderer,
-					bNeedsDBuffer
-				]
-				{
-					if (!bCorePassSucceeded || !bNeedsDBuffer)
-						return;
-
-					bCorePassSucceeded =
-						DecalRenderer->OnRender(
-							ForwardBatches,
-							VisibleDecals,
-							true);
-				}))
-			{
+			if (!AddDecalPass(DBufferUnlit, true))
 				return false;
-			}
 		}
 
 		FRenderGraphRasterPassDesc Forward{};

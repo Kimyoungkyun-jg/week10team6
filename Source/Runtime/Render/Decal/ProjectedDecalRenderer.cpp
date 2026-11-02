@@ -5,6 +5,7 @@
 #include "Render/MeshPassProcessor.h"
 #include "Render/RenderCommand.h"
 #include "Render/RenderResourceManager.h"
+#include "Render/SceneView.h"
 
 
 bool FProjectedDecalRenderer::Init(FRenderer* InRenderer)
@@ -30,7 +31,7 @@ bool FProjectedDecalRenderer::Init(FRenderer* InRenderer)
 		return false;
 	}
 
-	PipelineState = *BasePipeline;
+	MeshPipelineState = *BasePipeline;
 
 	ConstantBuffer =
 		RenderCommand::CreateConstantBuffer(
@@ -42,6 +43,30 @@ bool FProjectedDecalRenderer::Init(FRenderer* InRenderer)
 		return false;
 	}
 
+	FPipelineState* DepthPipeline =
+		FRenderResourceManager::GetPSO(
+			EPSOType::DBufferDecal_DepthReconstruction);
+
+	if (!DepthPipeline ||
+		!DepthPipeline->Shader ||
+		!DepthPipeline->Shader->VertexShader ||
+		!DepthPipeline->Shader->PixelShader)
+	{
+		return false;
+	}
+
+	DepthPipelineState = *DepthPipeline;
+
+	DepthViewConstantBuffer =
+		RenderCommand::CreateConstantBuffer(
+			sizeof(FProjectedDecalDepthViewConstants));
+
+	if (!DepthViewConstantBuffer ||
+		!DepthViewConstantBuffer->GetBuffer())
+	{
+		return false;
+	}
+
 	return IsReady();
 }
 
@@ -49,14 +74,19 @@ bool FProjectedDecalRenderer::IsReady() const
 {
 	return
 		Renderer &&
-		PipelineState.Shader &&
-		PipelineState.Shader->VertexShader &&
-		PipelineState.Shader->PixelShader &&
+		MeshPipelineState.Shader &&
+		MeshPipelineState.Shader->VertexShader &&
+		MeshPipelineState.Shader->PixelShader &&
 		ConstantBuffer &&
-		ConstantBuffer->GetBuffer();
+		ConstantBuffer->GetBuffer() &&
+		DepthPipelineState.Shader &&
+		DepthPipelineState.Shader->VertexShader &&
+		DepthPipelineState.Shader->PixelShader &&
+		DepthViewConstantBuffer &&
+		DepthViewConstantBuffer->GetBuffer();
 }
 
-bool FProjectedDecalRenderer::OnRender(
+bool FProjectedDecalRenderer::OnRenderMesh(
 	std::span<const FMeshDrawBatch> ReceiverBatches,
 	std::span<const FProjectedDecalRenderData> Decals,
 	bool bUnlitPass)
@@ -126,7 +156,7 @@ bool FProjectedDecalRenderer::OnRender(
 			FMeshDrawBatch Batch = SourceBatch;
 
 			// 머티리얼의 PSO를 사용하지 않는다.
-			Batch.Pipeline = PipelineState;
+			Batch.Pipeline = MeshPipelineState;
 
 			// 원본 표면과 같은 컬링, 래스터 규칙을 유지한다.
 			Batch.Pipeline.RasterizerState =
@@ -147,7 +177,7 @@ bool FProjectedDecalRenderer::OnRender(
 			// 원래 재질 텍스처가 데칼 t0를 덮어쓰지 않게 한다.
 			Batch.Textures.Reset();
 
-			Batch.Sampler = ESamplerState::LinearClamp;
+			Batch.Sampler = Decal.Sampler;
 			Batch.SamplerStages = EShaderBindFlagBits::Pixel;
 
 			// 원본 MaterialData는 유지한다.
@@ -166,6 +196,104 @@ bool FProjectedDecalRenderer::OnRender(
 		0,
 		1,
 		EShaderBindFlagBits::Pixel);
+
+	return true;
+}
+
+bool FProjectedDecalRenderer::OnRenderDepth(
+	const FSceneView& View,
+	uint32 Width,
+	uint32 Height,
+	std::span<const FProjectedDecalRenderData> Decals,
+	bool bUnlitPass)
+{
+	if (Decals.empty())
+		return true;
+
+	if (!IsReady() || Width == 0 || Height == 0)
+		return false;
+
+	FProjectedDecalDepthViewConstants ViewConstants{};
+
+	ViewConstants.InverseViewProjection =
+		View.ViewProjectionMatrix.Inverse();
+
+	ViewConstants.ViewportSize = FVector4(
+		static_cast<float>(Width),
+		static_cast<float>(Height),
+		1.0f / static_cast<float>(Width),
+		1.0f / static_cast<float>(Height));
+	
+	RenderCommand::UpdateBufferData(
+		DepthViewConstantBuffer.get(),
+		&ViewConstants,
+		sizeof(ViewConstants));
+
+	RenderCommand::BindPipelineState(
+		DepthPipelineState);
+
+	RenderCommand::BindVertexBuffer(nullptr);
+	RenderCommand::BindIndexBuffer(nullptr);
+
+	RenderCommand::BindConstantBuffer(
+		5,
+		DepthViewConstantBuffer.get(),
+		EShaderBindFlagBits::Pixel);
+
+	RenderCommand::BindConstantBuffer(
+		4,
+		ConstantBuffer.get(),
+		EShaderBindFlagBits::Pixel);
+
+	for (const FProjectedDecalRenderData& Decal : Decals)
+	{
+		if (Decal.bUnlit != bUnlitPass)
+			continue;
+
+		if (!IsValidProjectedDecalRenderData(Decal) ||
+			!Decal.ColorTexture ||
+			!Decal.ColorTexture->GetSRV())
+		{
+			continue;
+		}
+
+		const FProjectedDecalConstants Constants =
+			MakeProjectedDecalConstants(Decal);
+
+		RenderCommand::UpdateBufferData(
+			ConstantBuffer.get(),
+			&Constants,
+			sizeof(Constants));
+		
+		RenderCommand::BindShaderResource(
+			0,
+			Decal.ColorTexture,
+			EShaderBindFlagBits::Pixel);
+		
+		RenderCommand::BindSamplerState(
+			0,
+			Decal.Sampler,
+			EShaderBindFlagBits::Pixel);
+		
+		RenderCommand::Draw(3);
+	}
+
+	RenderCommand::BindConstantBuffer(
+		4,
+		nullptr,
+		EShaderBindFlagBits::Pixel);
+	
+	RenderCommand::BindConstantBuffer(
+		5,
+		nullptr,
+		EShaderBindFlagBits::Pixel);
+	
+	// t0: 데칼 텍스처
+	// t1: RenderGraph가 바인딩한 SceneDepth
+	RenderCommand::UnbindShaderResources(
+		0,
+		2,
+		EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
 
 	return true;
 }

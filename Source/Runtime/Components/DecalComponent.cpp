@@ -117,6 +117,7 @@ bool UDecalComponent::TryGetRenderData(
 	}
 
 	Data.bDecodeSRGB = !IsSRGBView(Texture);
+	Data.bUnlit = bUnlit;
 
 	Data.SortOrder = SortOrder;
 	Data.ComponentID = GetUUID();

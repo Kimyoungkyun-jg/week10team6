@@ -28,6 +28,7 @@ struct FProjectedDecalRenderData
 	// UNORM 색상 텍스처는 셰이더에서 선형화.
 	// SRGB SRV는 하드웨어가 선형화하므로 false
 	bool bDecodeSRGB = true;
+	bool bUnlit = false;
 
 	// 작은값부터 그린다. 큰 값이 나중에 덮인다.
 	int32 SortOrder = 0;

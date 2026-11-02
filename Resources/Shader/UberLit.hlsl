@@ -47,7 +47,8 @@ StructuredBuffer<uint> TileSpotIndices : register(t12);
 Texture2D<float4> ScreenShadowMask : register(t13);
 
 // 데칼
-Texture2D<float4> DBufferColor : register(t14);
+Texture2D<float4> DBufferLit : register(t14);
+Texture2D<float4> DBufferUnlit : register(t15);
 
 cbuffer MaterialParams : register(b2)
 {
@@ -446,11 +447,11 @@ FUberOutput Uber_PS(VS_OUT Input)
     }
     float3 Albedo = SurfaceColor.rgb * BaseColor.rgb;
     
-    float4 Decal =
-            DBufferColor.Load(
-                int3(int2(Input.Position.xy), 0));
+    int3 PixelCoord = int3(int2(Input.Position.xy), 0);
     
-    Albedo = Albedo * (1.0f - Decal.a) + Decal.rgb;
+    float4 LitDecal = DBufferLit.Load(PixelCoord);
+    
+    Albedo = Albedo * (1.0f - LitDecal.a) + LitDecal.rgb;
     
     float3 Diffuse;
     float3 Specular = 0.0f;
@@ -470,9 +471,12 @@ FUberOutput Uber_PS(VS_OUT Input)
     // 조명·그림자를 계산하지 않고 표면 색을 그대로 낸다.
     Diffuse = 1.0f;
 #endif
+    float3 FinalColor = Albedo * Diffuse + Specular + Emissive.rgb;
+    float4 UnlitDecal = DBufferUnlit.Load(PixelCoord);
 
-    Output.LitColor = float4(Albedo * Diffuse + Specular + Emissive.rgb,
-        SurfaceColor.a * BaseColor.a);
+    FinalColor = FinalColor * (1.0f - UnlitDecal.a) + UnlitDecal.rgb;
+
+    Output.LitColor = float4(FinalColor, SurfaceColor.a * BaseColor.a);
     Output.NormalRoughness = float4(ShadingNormal, 0.8f);
 #endif
     return Output;

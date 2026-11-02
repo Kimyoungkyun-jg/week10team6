@@ -24,7 +24,8 @@ public:
 	// 렌더 타깃 설정과 Clear는 RenderGraphs가 담당한다.
 	bool OnRender(
 		std::span<const FMeshDrawBatch> ReceiverBatches,
-		std::span<const FProjectedDecalRenderData> Decals);
+		std::span<const FProjectedDecalRenderData> Decals,
+		bool bUnlitPass);
 private:
 	// 비소유 포인터.
 	FRenderer* Renderer = nullptr;

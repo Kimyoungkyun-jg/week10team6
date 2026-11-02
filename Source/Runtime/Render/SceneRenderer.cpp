@@ -535,16 +535,24 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 		}
 
 		// 비활성 상태에서도 투명한 DBuffer를 Forward에 전달한다.
-		const FRenderGraphTextureRef DBufferColor =
+		const FRenderGraphTextureRef DBufferLit =
 			Graph.CreateTexture(
 				{
 					Width,
 					Height,
 					ETextureFormat::R8G8B8A8_UNorm
 				},
-				"DBufferColor");
+				"DBufferLit");
+		const FRenderGraphTextureRef DBufferUnlit =
+			Graph.CreateTexture(
+				{
+					Width,
+					Height,
+					ETextureFormat::R8G8B8A8_UNorm
+				},
+				"DBufferUnlit");
 
-		if (!DBufferColor) return false;
+		if (!DBufferLit || !DBufferUnlit) return false;
 
 		// 현재 업로드된 광원 정보를 기존 그리드에 전달한다.
 		FForwardLightTileGrid& Tiles = RenderData.ViewLightResources.GetTiles();
@@ -632,14 +640,14 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 				return false;
 		}
 
-		// 데칼 패스
+		// 데칼 lit 패스
 		{
 			FRenderGraphRasterPassDesc DecalPass{};
-			DecalPass.Name = "DBufferDecal";
+			DecalPass.Name = "DBufferLit";
 
 			DecalPass.ColorAttachments = {
 				{
-					DBufferColor,
+					DBufferLit,
 					ERenderGraphLoadAction::Clear,
 					{ 0.0f, 0.0f, 0.0f, 0.0f }
 				}
@@ -668,7 +676,51 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					bCorePassSucceeded =
 						DecalRenderer->OnRender(
 							ForwardBatches,
-							VisibleDecals);
+							VisibleDecals,
+							false);
+				}))
+			{
+				return false;
+			}
+		}
+		// 데칼 unlit 패스
+		{
+			FRenderGraphRasterPassDesc DecalPass{};
+			DecalPass.Name = "DBufferUnlit";
+
+			DecalPass.ColorAttachments = {
+				{
+					DBufferUnlit,
+					ERenderGraphLoadAction::Clear,
+					{ 0.0f, 0.0f, 0.0f, 0.0f }
+				}
+			};
+
+			if (bNeedsDBuffer)
+			{
+				DecalPass.DepthAttachment = {
+					Depth,
+					ERenderGraphLoadAction::Load,
+					1.0f, 0
+				};
+			}
+
+			if (!Graph.AddRasterPass(
+				std::move(DecalPass),
+				[
+					this,
+					DecalRenderer,
+					bNeedsDBuffer
+				]
+				{
+					if (!bCorePassSucceeded || !bNeedsDBuffer)
+						return;
+
+					bCorePassSucceeded =
+						DecalRenderer->OnRender(
+							ForwardBatches,
+							VisibleDecals,
+							true);
 				}))
 			{
 				return false;
@@ -677,7 +729,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 
 		FRenderGraphRasterPassDesc Forward{};
 		Forward.Name = "ForwardOpaque";
-		Forward.ReadTextures = { DBufferColor };
+		Forward.ReadTextures = { DBufferLit, DBufferUnlit };
 		Forward.ReadTextureStartSlot = 14;
 		Forward.ColorAttachments = {
 			{ LightingHDR, ERenderGraphLoadAction::Load }

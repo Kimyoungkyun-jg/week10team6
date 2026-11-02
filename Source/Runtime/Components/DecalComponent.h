@@ -81,5 +81,8 @@ private:
 	int32 SortOrder = 0;
 
 	UMaterial* DecalMaterial = nullptr;
+
+	UPROPERTY(EditAnywhere)
+	bool bUnlit = false;
 };
 

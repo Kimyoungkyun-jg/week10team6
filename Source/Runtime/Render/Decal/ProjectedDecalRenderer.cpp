@@ -58,7 +58,8 @@ bool FProjectedDecalRenderer::IsReady() const
 
 bool FProjectedDecalRenderer::OnRender(
 	std::span<const FMeshDrawBatch> ReceiverBatches,
-	std::span<const FProjectedDecalRenderData> Decals)
+	std::span<const FProjectedDecalRenderData> Decals,
+	bool bUnlitPass)
 {
 	// 그릴 것이 없는 것은 정상적인 성공으로 취급한다.
 	if (Decals.empty() ||
@@ -93,6 +94,9 @@ bool FProjectedDecalRenderer::OnRender(
 	// SortOrder로 정렬된 순서.
 	for (const FProjectedDecalRenderData& Decal : Decals)
 	{
+		if (Decal.bUnlit != bUnlitPass)
+			continue;
+
 		if (!IsValidProjectedDecalRenderData(Decal) ||
 			!Decal.ColorTexture ||
 			!Decal.ColorTexture->GetSRV())

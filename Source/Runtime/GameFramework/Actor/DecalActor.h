@@ -2,6 +2,7 @@
 
 #include "GameFramework/Actor.h"
 #include "Components/DecalComponent.h"
+#include "Components/BillboardComponent.h"
 
 #include "DecalActor.generated.h"
 
@@ -19,6 +20,12 @@ public:
 		return DecalComponent;
 	}
 
+	UBillboardComponent* GetBillboardComponent() const
+	{
+		return BillboardComponent;
+	}
+
 private:
 	UDecalComponent* DecalComponent = nullptr;
+	UBillboardComponent* BillboardComponent = nullptr;
 };

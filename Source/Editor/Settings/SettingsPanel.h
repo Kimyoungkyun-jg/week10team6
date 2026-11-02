@@ -29,6 +29,7 @@ struct FEditorSettings
 	ELightCullingMode LightCullingMode = ELightCullingMode::Tiled;
 	ERenderingPath RenderingPath = ERenderingPath::Deferred;
 	ELightingModel LightingModel = ELightingModel::Gouraud;
+	EDecalRenderMethod DecalRenderMethod = EDecalRenderMethod::MeshRerendering;
 
 	// Values
 	float SceneDepthMaxRange = 50.0f;

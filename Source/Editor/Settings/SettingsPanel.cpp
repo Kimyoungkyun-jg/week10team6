@@ -57,6 +57,24 @@ void FSettingsPanel::OnRender()
 	ImGui::SetNextItemWidth(200.0f);
 	if (ImGui::Combo("Lighting Model", &LightingModelIndex, LightingModels, IM_ARRAYSIZE(LightingModels)))
 		Settings.LightingModel = static_cast<ELightingModel>(LightingModelIndex);
+
+	/* 데칼 렌더링 방법 */
+	{
+		const char* DecalMethods[] = { "Mesh Re-rendering", "Depth Reconstruction" };
+
+		int DecalMethodIndex = static_cast<int>(Settings.DecalRenderMethod);
+
+		if (ImGui::Combo(
+			"Decal Method",
+			&DecalMethodIndex,
+			DecalMethods,
+			IM_ARRAYSIZE(DecalMethods)))
+		{
+			Settings.DecalRenderMethod =
+				static_cast<EDecalRenderMethod>(DecalMethodIndex);
+		}
+	}
+
 	const char* LightCullingModes[] = { "Off", "Tiled", "Clustered" };
 	int LightCullingModeIndex = static_cast<int>(Settings.LightCullingMode);
 	ImGui::SetNextItemWidth(200.0f);
@@ -204,6 +222,7 @@ bool FSettingsPanel::SaveSettings() const
 	File << "LightingModel=" << (Settings.LightingModel == ELightingModel::Gouraud ? "Gouraud" :
 		Settings.LightingModel == ELightingModel::Lambert ? "Lambert" :
 		Settings.LightingModel == ELightingModel::Unlit ? "Unlit" : "Phong") << "\n";
+	File << "DecalRenderMethod=" << (Settings.DecalRenderMethod == EDecalRenderMethod::MeshRerendering ? "MeshRerendering" : "DepthReconstruction") << "\n";
 	File << "\n";
 
 	File << "[Editor]\n";
@@ -370,6 +389,11 @@ bool FSettingsPanel::LoadSettings()
 					else if (ValueStr == "Lambert") Settings.LightingModel = ELightingModel::Lambert;
 					else if (ValueStr == "Phong") Settings.LightingModel = ELightingModel::Phong;
 					else if (ValueStr == "Unlit") Settings.LightingModel = ELightingModel::Unlit;
+				}
+				else if (Key == "DecalRenderMethod")
+				{
+					if (ValueStr == "DepthReconstruction") Settings.DecalRenderMethod = EDecalRenderMethod::DepthReconstruction;
+					else if (ValueStr == "MeshRerendering") Settings.DecalRenderMethod = EDecalRenderMethod::MeshRerendering;
 				}
 
 				else if (Key == "CameraMoveSpeed") Settings.CameraSpeed = std::stof(ValueStr);

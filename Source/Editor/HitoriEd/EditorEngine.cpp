@@ -903,6 +903,8 @@ void UEditorEngine::BuildSceneRenderOptions(FGameViewportClient* ViewClient, FSc
 	Options.DisplayGamma = S.DisplayGamma;
 	Options.bShowVignette = S.bShowVignette;
 	Options.bShowCameraOverlay = S.bShowCameraOverlay;
+
+	Options.DecalRenderMethod = S.DecalRenderMethod;
 }
 
 void UEditorEngine::BuildSceneRenderOptions(FEditorViewportClient* ViewClient, bool IsPIE, FSceneRenderOptions& Options)
@@ -936,6 +938,8 @@ void UEditorEngine::BuildSceneRenderOptions(FEditorViewportClient* ViewClient, b
 	Options.bShowWorldNormal = !IsPIE && ViewClient->IsWorldNormal();
 	Options.bShowLightCulling = !IsPIE && ViewClient->IsLightCulling();
 	Options.SceneDepthRange = ViewClient->GetMaxRange();
+
+	Options.DecalRenderMethod = S.DecalRenderMethod;
 }
 
 // 게임 뷰포트 화면을 렌더링한다

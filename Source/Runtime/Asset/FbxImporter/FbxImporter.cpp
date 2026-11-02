@@ -1,4 +1,4 @@
-#include "EnginePCH.h"
+﻿#include "EnginePCH.h"
 #include "FbxImporter.h"
 #include <fbxsdk.h>
 #include "Render/SkeletalMeshData.h"
@@ -11,7 +11,8 @@ using namespace fbxsdk;
 
 namespace
 {
-    FMatrix ConvertFbxMatrix(const fbxsdk::FbxAMatrix& FbxMat, bool bFlipHandedness)
+    template <typename TFbxMatrix>
+    FMatrix ConvertFbxMatrix(const TFbxMatrix& FbxMat, bool bFlipHandedness = false)
     {
         FMatrix Result;
         for (int row = 0; row < 4; ++row)
@@ -187,6 +188,30 @@ namespace
                 MeshMatrix = Node->EvaluateGlobalTransform();
             }
 
+            fbxsdk::FbxPose* BindPose = nullptr;
+            int MeshPoseIndex = -1;
+            if (fbxsdk::FbxScene* Scene = Node->GetScene())
+            {
+                for (int PoseIndex = 0; PoseIndex < Scene->GetPoseCount(); ++PoseIndex)
+                {
+                    fbxsdk::FbxPose* Candidate = Scene->GetPose(PoseIndex);
+                    if (Candidate && Candidate->IsBindPose())
+                    {
+                        const int CandidateMeshIndex = Candidate->Find(Node);
+                        if (CandidateMeshIndex >= 0)
+                        {
+                            BindPose = Candidate;
+                            MeshPoseIndex = CandidateMeshIndex;
+                            break;
+                        }
+                    }
+                }
+            }
+            const FMatrix MeshBindGlobal = BindPose
+                ? ConvertFbxMatrix(BindPose->GetMatrix(MeshPoseIndex), bFlipHandedness)
+                : ConvertFbxMatrix(Node->EvaluateGlobalTransform(), bFlipHandedness);
+            const FMatrix MeshBindInverse = MeshBindGlobal.Inverse();
+
             // 원본 정점 위치 읽기
             int ControlPointCount = Mesh->GetControlPointsCount();
             fbxsdk::FbxVector4* ControlPoints = Mesh->GetControlPoints();
@@ -257,6 +282,29 @@ namespace
             for (int i = 0; i < ControlPointCount; ++i)
             {
                 Out.ControlPointWeights[i].NormalizeWeights();
+            }
+
+            // 정점은 mesh 로컬 공간이므로 bone의 bind pose도 같은 공간으로 맞춘다.
+            if (BindPose)
+            {
+                for (int PoseIndex = 0; PoseIndex < BindPose->GetCount(); ++PoseIndex)
+                {
+                    fbxsdk::FbxNode* PoseNode = BindPose->GetNode(PoseIndex);
+                    if (!PoseNode || PoseNode == Node) continue;
+                    for (int32 BoneIndex = 0; BoneIndex < Out.Bones.Num(); ++BoneIndex)
+                    {
+                        if (Out.Bones[BoneIndex].Name == PoseNode->GetName())
+                        {
+                            Out.Bones[BoneIndex].GlobalBindPose = ConvertFbxMatrix(BindPose->GetMatrix(PoseIndex), bFlipHandedness);
+                            break;
+                        }
+                    }
+                }
+            }
+            for (FBoneInfo& Bone : Out.Bones)
+            {
+                Bone.GlobalBindPose = Bone.GlobalBindPose * MeshBindInverse;
+                Bone.InverseBindPose = Bone.GlobalBindPose.Inverse();
             }
 
             // 클러스터가 없는 루트 eNull 노드가 있을 경우 자식의 바인드 포즈로부터 역산

@@ -6,11 +6,11 @@
 
 // 셰이더 스캐너는 매크로 정의 없이 이 파일을 컴파일하므로 기본 변형에는 Lambert를 쓴다.
 // 명시적인 변형은 조명 모델 또는 뷰 모드 하나만 1로 설정한다.
-#if !defined(LIGHTING_MODEL_GOURAUD) && !defined(LIGHTING_MODEL_LAMBERT) && !defined(LIGHTING_MODEL_PHONG) && !defined(LIGHTING_MODEL_UNLIT) && !defined(VIEW_MODE_WORLD_NORMAL)
+#if !defined(LIGHTING_MODEL_GOURAUD) && !defined(LIGHTING_MODEL_LAMBERT) && !defined(LIGHTING_MODEL_PHONG) && !defined(LIGHTING_MODEL_UNLIT) && !defined(VIEW_MODE_WORLD_NORMAL) && !defined(DECAL_MESH)
     #define LIGHTING_MODEL_LAMBERT 1
 #endif
 
-#if (LIGHTING_MODEL_GOURAUD + LIGHTING_MODEL_LAMBERT + LIGHTING_MODEL_PHONG + LIGHTING_MODEL_UNLIT + VIEW_MODE_WORLD_NORMAL) != 1
+#if (LIGHTING_MODEL_GOURAUD + LIGHTING_MODEL_LAMBERT + LIGHTING_MODEL_PHONG + LIGHTING_MODEL_UNLIT + VIEW_MODE_WORLD_NORMAL + DECAL_MESH) != 1
     #error Exactly one lighting model or view mode must be enabled.
 #endif
 
@@ -57,6 +57,28 @@ cbuffer MaterialParams : register(b2)
 
 Texture2D ColorTexture : register(t0);
 Texture2D NormalTexture : register(t1);
+#if DECAL_MESH
+Texture2D DecalTexture : register(t2);
+SamplerState DecalSampler : register(s2);
+
+cbuffer MeshDecalView : register(b4)
+{
+    matrix DecalWorld;
+    matrix DecalViewProjection;
+    matrix DecalInverseViewProjection;
+    matrix InverseDecalWorld;
+    matrix DecalView;
+    float4 ViewportInverseSize;
+};
+
+cbuffer MeshDecalParams : register(b5)
+{
+    float4 DecalColor;
+    float4 DecalOptions;
+    float4 DecalShadowFlags;
+    float4 DecalSpecularColorShininess;
+};
+#endif
 
 SamplerState ColorSampler : register(s0);
 SamplerState SkySampler : register(s1);
@@ -98,7 +120,11 @@ struct FUberOutput
 // Gouraud는 채널을 받지 않으므로 정점 셰이더에서 불려도 마스크를 읽지 않는다.
 float GetLightShadow(FLightRenderParameters Light, float3 PixelPosition)
 {
+#if DECAL_MESH
+    if (Light.ShadowMapChannel == INVALID_SHADOW_CHANNEL || DecalShadowFlags.x < 0.5f) return 1.0f;
+#else
     if (Light.ShadowMapChannel == INVALID_SHADOW_CHANNEL || ShadowFlags.x < 0.5f) return 1.0f;
+#endif
     return ScreenShadowMask.Load(int3(int2(PixelPosition.xy), 0))[Light.ShadowMapChannel];
 }
 
@@ -170,6 +196,7 @@ VS_OUT Uber_VS(VS_IN Input)
     return Output;
 }
 
+#if !DECAL_MESH
 FUberOutput Uber_PS(VS_OUT Input)
 {
     FUberOutput Output;
@@ -213,7 +240,37 @@ FUberOutput Uber_PS(VS_OUT Input)
 #endif
     return Output;
 }
+#endif
 
 // 현재 리소스 매니저는 .hlsl 파일을 스캔할 때 mainVS/mainPS 진입점을 찾는다.
 VS_OUT mainVS(VS_IN Input) { return Uber_VS(Input); }
+#if DECAL_MESH
+float4 mainPS(VS_OUT Input) : SV_Target0
+{
+    float3 LocalPosition = mul(float4(Input.WorldPosition, 1.0f), InverseDecalWorld).xyz;
+    if (any(abs(LocalPosition) > 0.5f)) discard;
+
+    float3 Normal = GetShadingNormal(Input);
+    float3 Forward = normalize(DecalWorld[0].xyz);
+    if (dot(Normal, -Forward) < -0.1f) discard;
+
+    float2 DecalUV = float2(LocalPosition.y + 0.5f, 0.5f - LocalPosition.z);
+    float4 Sample = DecalTexture.Sample(DecalSampler, DecalUV);
+    float Alpha = saturate(Sample.a * DecalColor.a * DecalOptions.x);
+    if (Alpha <= 0.0f) discard;
+    float3 Color = pow(max(Sample.rgb, 0.0f), 2.2f) * DecalColor.rgb;
+    if (DecalOptions.y > 0.5f)
+    {
+        FLightResult Lit = CalculateTiledLighting(Input.Position.xyz, Input.WorldPosition, Input.ViewDepth, Normal, true);
+        Color = Color * Lit.Diffuse + Lit.Specular;
+    }
+    else if (DecalShadowFlags.x > 0.5f && DecalShadowFlags.y > 0.5f)
+    {
+        float4 Shadow = ScreenShadowMask.Load(int3(int2(Input.Position.xy), 0));
+        Color *= min(min(Shadow.x, Shadow.y), min(Shadow.z, Shadow.w));
+    }
+    return float4(Color, Alpha);
+}
+#else
 FUberOutput mainPS(VS_OUT Input) { return Uber_PS(Input); }
+#endif

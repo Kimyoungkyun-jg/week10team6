@@ -19,6 +19,7 @@ struct FEditorSettings
 	bool bWireframe = false;
 	bool bDrawPrimitives = true;
 	bool bDrawDecal = true;
+	EDecalRenderMethod DecalRenderMethod = EDecalRenderMethod::DrawDecalVolume;
 	bool bCacheShadows = true; // r.Shadow.CacheWholeSceneShadows
 	EPcfMode PcfMode = EPcfMode::Sample8;
 	bool bDrawBoundingBox = false;

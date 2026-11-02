@@ -407,8 +407,13 @@ void FViewportsPanel::DrawStatOverlay(ImDrawList* DrawList, const ImVec2& ViewMi
 const FRenderStats& Stats = RenderData.RenderStats;
 	if (FStatOverlay::IsEnabled(EStatFlags::Decal)) {
 		Lines.Add({ "Decal", TitleColor });
+		Lines.Add({ std::format("  Method {}", Stats.DecalMethod == EDecalRenderMethod::DrawMeshAgain
+			? "Draw Mesh Again" : "Draw Decal Volume"), ValueColor });
 		Lines.Add({ std::format("  Registered {}  Visible {}  Draws {}",
 			Stats.TotalDecals, Stats.VisibleDecals, Stats.DecalDrawCalls), ValueColor });
+		Lines.Add({ std::format("  BVH candidates {}  Receiver pairs {}  Skipped {}",
+			Stats.DecalBVHCandidates, Stats.DecalReceiverPairs, Stats.DecalsSkippedNoReceiver), ValueColor });
+		Lines.Add({ std::format("  BVH CPU {:.3f} ms", Stats.DecalBVHCPUms), ValueColor });
 		if (Stats.DecalDrawCalls == 0)
 			Lines.Add({ "  GPU  0.000 ms", ValueColor });
 		else if (RenderData.DecalGpuTimer.HasSample())
@@ -417,6 +422,11 @@ const FRenderStats& Stats = RenderData.RenderStats;
 				RenderData.DecalGpuTimer.GetMaxMs()), ValueColor });
 		else
 			Lines.Add({ "  GPU  pending", ValueColor });
+		if (RenderData.FrameGpuTimer.HasSample())
+			Lines.Add({ std::format("  Frame GPU ms  Last {:.3f}  Avg {:.3f}",
+				RenderData.FrameGpuTimer.GetLastMs(), RenderData.FrameGpuTimer.GetAverageMs()), ValueColor });
+		else
+			Lines.Add({ "  Frame GPU  pending", ValueColor });
 	}
 	if (FStatOverlay::IsEnabled(EStatFlags::Light)) {
 		Lines.Add({ "Light", TitleColor });

@@ -23,6 +23,11 @@ struct FRenderStats
 	uint32 TotalDecals = 0;
 	uint32 VisibleDecals = 0;
 	uint32 DecalDrawCalls = 0;
+	uint32 DecalBVHCandidates = 0;
+	uint32 DecalReceiverPairs = 0;
+	uint32 DecalsSkippedNoReceiver = 0;
+	double DecalBVHCPUms = 0.0;
+	EDecalRenderMethod DecalMethod = EDecalRenderMethod::DrawDecalVolume;
 	uint64 Triangles = 0;
 	uint32 LODCounts[4] = {};
 	uint64 LODTriangles[4] = {};
@@ -75,6 +80,8 @@ struct FSceneRenderData
 	FRenderQueue RenderQueue;
 	FRenderStats RenderStats;
 	FGPUTimer DecalGpuTimer;
+	FGPUTimer FrameGpuTimer;
+	int32 LastDecalMethod = -1;
 	TArray<FPrimitiveSceneProxy*> VisibleProxies;
 	TArray<FLODSelectionInput> LODInputs;
 	TArray<uint8> SelectedLODs;
@@ -144,6 +151,8 @@ struct FSceneRenderData
 	{
 		ResetFrame();
 		DecalGpuTimer.Reset();
+		FrameGpuTimer.Reset();
+		LastDecalMethod = -1;
 		for (FGatherChunk& Chunk : GatherChunks)
 		{
 			Chunk.Groups.clear();

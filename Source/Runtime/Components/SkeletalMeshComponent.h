@@ -16,6 +16,7 @@ public:
 	virtual void TickComponent(float DeltaTime) override;
 
 	virtual void SetSkeletalMesh(USkeletalMesh* InSkeletalMesh) override;
+	virtual FBox CalcLocalBounds() const override;
 
 	void InitBoneTransforms();
 	void SetBoneTransform(int32 BoneIndex, const FMatrix& LocalTransform);
@@ -32,5 +33,7 @@ private:
 	TArray<FMatrix> GlobalBoneTransforms;
 	TArray<FMatrix> SkinningMatrices;
 	TArray<FVertex> SkinnedVertices;
+	FBox SkinnedBounds{};
+	bool bHasSkinnedBounds = false;
 	bool bSkinningMatricesDirty = true;
 };

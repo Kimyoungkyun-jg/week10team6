@@ -3,6 +3,8 @@
 #include "Render/RenderCommand.h"
 #include "Render/RenderPacket.h"
 #include "Collision/Ray.h"
+#include "Engine/World.h"
+#include "Engine/Scene.h"
 
 
 USkeletalMeshComponent::USkeletalMeshComponent()
@@ -27,8 +29,14 @@ void USkeletalMeshComponent::TickComponent(float DeltaTime)
 
 void USkeletalMeshComponent::SetSkeletalMesh(USkeletalMesh* InSkeletalMesh)
 {
+	bHasSkinnedBounds = false;
 	Super::SetSkeletalMesh(InSkeletalMesh);
 	InitBoneTransforms();
+}
+
+FBox USkeletalMeshComponent::CalcLocalBounds() const
+{
+	return bHasSkinnedBounds ? SkinnedBounds : Super::CalcLocalBounds();
 }
 
 void USkeletalMeshComponent::InitBoneTransforms()
@@ -92,6 +100,12 @@ void USkeletalMeshComponent::PerformCPUSkinning()
 
 	int32 VertexCount = static_cast<int32>(MeshData.SkinnedVertices.Num());
 	SkinnedVertices.SetNum(VertexCount);
+	if (VertexCount == 0)
+	{
+		bHasSkinnedBounds = false;
+		bSkinningMatricesDirty = false;
+		return;
+	}
 
 	FVector BoundsMin(FLT_MAX, FLT_MAX, FLT_MAX);
 	FVector BoundsMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
@@ -129,9 +143,12 @@ void USkeletalMeshComponent::PerformCPUSkinning()
 		BoundsMax.Z = std::max(BoundsMax.Z, BlendedPos.Z);
 	}
 
+	SkinnedBounds = { BoundsMin, BoundsMax };
+	bHasSkinnedBounds = VertexCount > 0;
 	SkeletalMesh->MeshData.AABB.Min = BoundsMin;
 	SkeletalMesh->MeshData.AABB.Max = BoundsMax;
 	SkeletalMesh->RebuildRenderData();
+	if (GetWorld() && GetSceneProxy()) GetWorld()->GetScene().MarkDirty(GetSceneProxy());
 
 	if (SkeletalMesh->VertexBuffer)
 	{
@@ -156,6 +173,7 @@ void USkeletalMeshComponent::SubmitToRenderQueue(FRenderQueue& RenderQueue, cons
 		if (!SectionMaterial) continue;
 
 		FRenderPacket Packet;
+		Packet.Proxy = GetSceneProxy();
 		Packet.SkeletalMesh = SkeletalMesh;
 		Packet.Model = RenderQueue.StoreWorldMatrix(GetWorldMatrix());
 		Packet.StartIndex = Section.StartIndex;

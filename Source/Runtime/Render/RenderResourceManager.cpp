@@ -72,7 +72,7 @@ void FRenderResourceManager::InitPipelineStates()
 	if (DepthProgram && DepthProgram->VertexShader)
 		ShaderProgramMap["ShadowDepth"] = MakeUnique<FShaderProgram>(DepthProgram->VertexShader, nullptr);
 
-	const char* Names[] = { "LIGHTING_MODEL_GOURAUD", "LIGHTING_MODEL_LAMBERT", "LIGHTING_MODEL_PHONG", "LIGHTING_MODEL_UNLIT", "VIEW_MODE_WORLD_NORMAL" };
+	const char* Names[] = { "LIGHTING_MODEL_GOURAUD", "LIGHTING_MODEL_LAMBERT", "LIGHTING_MODEL_PHONG", "LIGHTING_MODEL_UNLIT", "VIEW_MODE_WORLD_NORMAL", "DECAL_MESH" };
 	for (const char* Name : Names)
 	{
 		const D3D_SHADER_MACRO Defines[] = { { Name, "1" }, { nullptr, nullptr } };
@@ -121,6 +121,13 @@ FShaderProgram* FRenderResourceManager::GetForwardShaderProgram(ELightingModel M
 	default: break;
 	}
 	const FString Key = FString("Resources/Shader/UberLit.hlsl#") + Name;
+	if (auto* Found = Get().ShaderProgramMap.Find(Key)) return Found->get();
+	return nullptr;
+}
+
+FShaderProgram* FRenderResourceManager::GetMeshDecalShaderProgram()
+{
+	const FString Key = "Resources/Shader/UberLit.hlsl#DECAL_MESH";
 	if (auto* Found = Get().ShaderProgramMap.Find(Key)) return Found->get();
 	return nullptr;
 }

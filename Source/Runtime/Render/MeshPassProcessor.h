@@ -34,6 +34,7 @@ struct FMeshDrawBatch
 		uint32 StartIndex = 0;
 		uint32 IndexCount = 0;
 		const void* ObjectKey = nullptr;
+		const FPrimitiveSceneProxy* Proxy = nullptr;
 		bool bOccludedByGpu = false;
 	};
 

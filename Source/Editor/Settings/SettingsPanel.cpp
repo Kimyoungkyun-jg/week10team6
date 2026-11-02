@@ -47,6 +47,11 @@ void FSettingsPanel::OnRender()
 	ImGui::TextDisabled("Fill mode is configured per viewport.");
 	ImGui::Checkbox("Draw Primitives", &Settings.bDrawPrimitives);
 	ImGui::Checkbox("Draw Decal", &Settings.bDrawDecal);
+	const char* DecalMethods[] = { "Draw Decal Volume", "Draw Mesh Again" };
+	int DecalMethodIndex = static_cast<int>(Settings.DecalRenderMethod);
+	ImGui::SetNextItemWidth(200.0f);
+	if (ImGui::Combo("Decal Method", &DecalMethodIndex, DecalMethods, IM_ARRAYSIZE(DecalMethods)))
+		Settings.DecalRenderMethod = static_cast<EDecalRenderMethod>(DecalMethodIndex);
 	ImGui::Checkbox("Cache Shadows", &Settings.bCacheShadows);
 	ImGui::Checkbox("Draw Bounding Box", &Settings.bDrawBoundingBox);
 	ImGui::Checkbox("Show Object UUID", &Settings.bShowUUID);
@@ -222,6 +227,7 @@ bool FSettingsPanel::SaveSettings() const
 	File << "Wireframe=" << Settings.bWireframe << "\n";
 	File << "DrawPrimitives=" << Settings.bDrawPrimitives << "\n";
 	File << "DrawDecal=" << Settings.bDrawDecal << "\n";
+	File << "DecalMethod=" << static_cast<int>(Settings.DecalRenderMethod) << "\n";
 	File << "CacheShadows=" << Settings.bCacheShadows << "\n";
 	File << "PcfMode=" << static_cast<uint32_t>(Settings.PcfMode) << "\n";
 	File << "DrawBoundingBox=" << Settings.bDrawBoundingBox << "\n";
@@ -368,6 +374,12 @@ bool FSettingsPanel::LoadSettings()
                 if (Key == "Wireframe") Settings.bWireframe = std::stoi(ValueStr);
 				else if (Key == "DrawPrimitives") Settings.bDrawPrimitives = std::stoi(ValueStr);
 				else if (Key == "DrawDecal") Settings.bDrawDecal = std::stoi(ValueStr);
+				else if (Key == "DecalMethod")
+				{
+					const int Method = std::stoi(ValueStr);
+					if (Method >= 0 && Method <= static_cast<int>(EDecalRenderMethod::DrawMeshAgain))
+						Settings.DecalRenderMethod = static_cast<EDecalRenderMethod>(Method);
+				}
 				else if (Key == "CacheShadows") Settings.bCacheShadows = std::stoi(ValueStr);
 				else if (Key == "PcfMode")
 				{

@@ -906,6 +906,7 @@ void UEditorEngine::BuildSceneRenderOptions(FGameViewportClient* ViewClient, FSc
 	Options.bEnableFXAA = SettingsPanel->GetSettings().bEnableFXAA;
 	Options.bCacheShadows = SettingsPanel->GetSettings().bCacheShadows;
 	Options.bDrawDecal = SettingsPanel->GetSettings().bDrawDecal;
+	Options.DecalRenderMethod = SettingsPanel->GetSettings().DecalRenderMethod;
 	Options.PcfMode = SettingsPanel->GetSettings().PcfMode;
 	Options.RenderingPath = SettingsPanel->GetSettings().RenderingPath;
 	Options.LightingModel = SettingsPanel->GetSettings().LightingModel;
@@ -931,6 +932,7 @@ void UEditorEngine::BuildSceneRenderOptions(FEditorViewportClient* ViewClient, b
 	Options.bEnableFXAA = SettingsPanel->GetSettings().bEnableFXAA;
 	Options.bCacheShadows = SettingsPanel->GetSettings().bCacheShadows;
 	Options.bDrawDecal = SettingsPanel->GetSettings().bDrawDecal;
+	Options.DecalRenderMethod = SettingsPanel->GetSettings().DecalRenderMethod;
 	Options.PcfMode = SettingsPanel->GetSettings().PcfMode;
 	Options.RenderingPath = SettingsPanel->GetSettings().RenderingPath;
 	Options.LightingModel = SettingsPanel->GetSettings().LightingModel;

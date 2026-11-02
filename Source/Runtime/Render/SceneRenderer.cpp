@@ -31,12 +31,27 @@
 #include <cstring>
 #include <utility>
 #include <vector>
+#include <unordered_set>
+#include <unordered_map>
 
 DECLARE_CYCLE_STAT("Frustum Cull", STAT_FrustumCull);
 DECLARE_CYCLE_STAT("Gather Elements", STAT_GatherElements);
 
 namespace
 {
+	bool IntersectsBox(const FBox& A, const FBox& B)
+	{
+		return A.Min.X <= B.Max.X && A.Max.X >= B.Min.X &&
+			A.Min.Y <= B.Max.Y && A.Max.Y >= B.Min.Y &&
+			A.Min.Z <= B.Max.Z && A.Max.Z >= B.Min.Z;
+	}
+
+	struct FVisibleDecal
+	{
+		const FDecalSceneProxy* Proxy = nullptr;
+		std::vector<const FPrimitiveSceneProxy*> Receivers;
+	};
+
 	std::atomic<uint32> GCascadeCount{ 4 };
 	std::atomic<float> GCascadeLogRatio{ 0.8f };
 
@@ -327,7 +342,18 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 
 	bCorePassSucceeded = true;
 	bTilesBuilt = false;
-	if (FStatOverlay::IsEnabled(EStatFlags::Decal)) RenderData.DecalGpuTimer.Poll();
+	RenderData.RenderStats.DecalMethod = Options.DecalRenderMethod;
+	if (RenderData.LastDecalMethod != static_cast<int32>(Options.DecalRenderMethod))
+	{
+		RenderData.DecalGpuTimer.Reset();
+		RenderData.FrameGpuTimer.Reset();
+		RenderData.LastDecalMethod = static_cast<int32>(Options.DecalRenderMethod);
+	}
+	if (FStatOverlay::IsEnabled(EStatFlags::Decal))
+	{
+		RenderData.DecalGpuTimer.Poll();
+		RenderData.FrameGpuTimer.Poll();
+	}
 	if (Options.bShowWorldNormal)
 		return AddWorldNormalPass(Graph, Renderer, Targets, Options);
 
@@ -503,7 +529,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 	}
 	else // Forward Rendering
 	{
-		std::vector<const FDecalSceneProxy*> Decals;
+		std::vector<FVisibleDecal> Decals;
 		RenderData.RenderStats.TotalDecals = World->GetScene().GetDecals().Num();
 		if (Options.bDrawPrimitives && Options.bDrawDecal && Options.LightingModel == ELightingModel::Phong)
 		{
@@ -512,13 +538,10 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 				if (!Decal->IsRenderable(View.bGameView)) continue;
 				uint32 PlaneMask = FrustumAllPlanesMask;
 				if (ClassifyBoxInFrustum(Decal->GetBounds(), View.Frustum, PlaneMask) == EFrustumTest::Outside) continue;
-				Decals.push_back(Decal);
+				Decals.push_back({ Decal, {} });
 			}
 		}
-		RenderData.RenderStats.VisibleDecals = static_cast<uint32>(Decals.size());
-		const FRenderGraphTextureRef NormalDecalMask = Decals.empty() ? FRenderGraphTextureRef{} :
-			Graph.CreateTexture(HDRDesc, "ForwardNormalDecalMask");
-		if (!Decals.empty() && !NormalDecalMask) return false;
+
 		ForwardBatches.Reset();
 		if (Options.bDrawPrimitives)
 		{
@@ -526,6 +549,49 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			if (!Processor.Build(View, RenderData.RenderQueue, &RenderData,
 				EMeshPassType::Forward, ForwardBatches, Options.LightingModel)) return false;
 		}
+
+		std::unordered_map<const FPrimitiveSceneProxy*, std::vector<std::pair<uint32, uint32>>> ReceiverItems;
+		if (!Decals.empty())
+		{
+			std::unordered_set<const FPrimitiveSceneProxy*> Receivers;
+			for (uint32 BatchIndex = 0; BatchIndex < ForwardBatches.Num(); ++BatchIndex)
+				for (uint32 ItemIndex = 0; ItemIndex < ForwardBatches[BatchIndex].Items.Num(); ++ItemIndex)
+				{
+					const FMeshDrawBatch::FItem& Item = ForwardBatches[BatchIndex].Items[ItemIndex];
+					if (!Item.Proxy || !Item.Proxy->bDecalOn) continue;
+					Receivers.insert(Item.Proxy);
+					if (Options.DecalRenderMethod == EDecalRenderMethod::DrawMeshAgain)
+						ReceiverItems[Item.Proxy].push_back({ BatchIndex, ItemIndex });
+				}
+			const FBox DecalLocalBounds{ FVector(-0.5f, -0.5f, -0.5f), FVector(0.5f, 0.5f, 0.5f) };
+			const uint64 StartCycles = FPlatformTime::GetCycles64();
+			for (FVisibleDecal& Entry : Decals)
+			{
+				World->GetScene().BVH.Query(
+					[&](const FBox& Bounds) { return IntersectsBox(Bounds, Entry.Proxy->GetBounds()); },
+					[&](FPrimitiveSceneProxy* Receiver)
+					{
+						++RenderData.RenderStats.DecalBVHCandidates;
+						if (!Receivers.contains(Receiver)) return;
+						const FAABB& Bounds = Receiver->GetBounds();
+						const FBox ReceiverBox{ Bounds.Center - Bounds.Extent, Bounds.Center + Bounds.Extent };
+						if (!IntersectsBox(ReceiverBox.GetWorldAABB(Entry.Proxy->GetInverseWorldMatrix()), DecalLocalBounds)) return;
+						Entry.Receivers.push_back(Receiver);
+						++RenderData.RenderStats.DecalReceiverPairs;
+					});
+			}
+			RenderData.RenderStats.DecalBVHCPUms = FPlatformTime::ToMilliseconds64(FPlatformTime::GetCycles64() - StartCycles);
+			
+			const auto NewEnd = std::remove_if(Decals.begin(), Decals.end(), [](const FVisibleDecal& Entry) { return Entry.Receivers.empty(); });
+			
+			RenderData.RenderStats.DecalsSkippedNoReceiver = static_cast<uint32>(std::distance(NewEnd, Decals.end()));
+			Decals.erase(NewEnd, Decals.end());
+		}
+		RenderData.RenderStats.VisibleDecals = static_cast<uint32>(Decals.size());
+		const bool bVolumeDecals = Options.DecalRenderMethod == EDecalRenderMethod::DrawDecalVolume;
+		const FRenderGraphTextureRef NormalDecalMask = !bVolumeDecals || Decals.empty() ? FRenderGraphTextureRef{} :
+			Graph.CreateTexture(HDRDesc, "ForwardNormalDecalMask");
+		
 		// 현재 업로드된 광원 정보를 기존 그리드에 전달한다.
 		FForwardLightTileGrid& Tiles = RenderData.ViewLightResources.GetTiles();
 		FStructuredBuffer* SceneLights = RenderData.ViewLightResources.GetSceneLights();
@@ -543,6 +609,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			Tiles.PrepareBuild(View, GridLighting, SceneLights, Targets.Depth.get(), CullingMode);
 
 		const bool bNeedsLightCulling = bGridPrepared && CullingMode != ELightCullingMode::Off && (RenderData.HasSpotLights() || RenderData.HasPointLights());
+		
 		// 그림자 마스크는 장면 깊이로 Projection하므로 프리패스가 필요하다. Gouraud는 FinalizeShadowLights가 채널을 주지 않는다.
 		const bool bForwardShadows = Options.bDrawPrimitives && ShadowAtlasRef && !ShadowedLights.IsEmpty();
 		if (bNeedsLightCulling || bForwardShadows)
@@ -663,8 +730,10 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					RenderCommand::BindMesh(Cube);
 					RenderCommand::BindSamplerState(0, ESamplerState::LinearClamp, EShaderBindFlagBits::Pixel);
 					const bool bTimed = FStatOverlay::IsEnabled(EStatFlags::Decal) && RenderData.DecalGpuTimer.Begin();
-					for (const FDecalSceneProxy* Decal : Decals)
+					
+					for (const FVisibleDecal& Entry : Decals)
 					{
+						const FDecalSceneProxy* Decal = Entry.Proxy;
 						FDecalViewConstants ViewConstants{};
 						ViewConstants.DecalWorld = Decal->GetWorldMatrix();
 						ViewConstants.ViewProjection = View.ViewProjectionMatrix;
@@ -687,6 +756,80 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					}
 					if (bTimed) RenderData.DecalGpuTimer.End();
 					RenderCommand::UnbindShaderResources(2, 1, EShaderBindFlagBits::Pixel);
+					UnbindForwardLighting(Renderer);
+				})) return false;
+		}
+		else if (!Decals.empty())
+		{
+			FRenderGraphRasterPassDesc DecalPass{};
+			DecalPass.Name = "MeshProjectionDecal";
+			DecalPass.ColorAttachments = { { LightingHDR, ERenderGraphLoadAction::Load } };
+			DecalPass.DepthAttachment = { Depth, ERenderGraphLoadAction::Load, 1.0f, 0 };
+			if (!Graph.AddRasterPass(std::move(DecalPass),
+				[this, Renderer, &Graph, Decals, ReceiverItems, ForwardShadowMask, Options, Width, Height]
+				{
+					if (!bCorePassSucceeded) return;
+					FShaderProgram* Shader = FRenderResourceManager::GetMeshDecalShaderProgram();
+					if (!Shader || !Shader->VertexShader || !Shader->PixelShader ||
+						!Renderer->GetDecalViewConstants() || !Renderer->GetDecalParameters() ||
+						!BindForwardLighting(Renderer, Options, ForwardShadowMask ? Graph.Resolve(ForwardShadowMask) : nullptr))
+					{
+						bCorePassSucceeded = false;
+						return;
+					}
+					const bool bTimed = FStatOverlay::IsEnabled(EStatFlags::Decal) && RenderData.DecalGpuTimer.Begin();
+					RenderCommand::BindSamplerState(2, ESamplerState::LinearClamp, EShaderBindFlagBits::Pixel);
+					for (const FVisibleDecal& Entry : Decals)
+					{
+						const FDecalSceneProxy* Decal = Entry.Proxy;
+						FDecalViewConstants ViewConstants{};
+						ViewConstants.DecalWorld = Decal->GetWorldMatrix();
+						ViewConstants.ViewProjection = View.ViewProjectionMatrix;
+						ViewConstants.InverseViewProjection = View.ViewProjectionMatrix.Inverse();
+						ViewConstants.InverseDecalWorld = Decal->GetInverseWorldMatrix();
+						ViewConstants.View = View.ViewMatrix;
+						ViewConstants.ViewportInverseSize = FVector4(1.0f / Width, 1.0f / Height, 0.0f, 0.0f);
+						FDecalParameters Parameters{};
+						Parameters.Color = Decal->GetColor();
+						Parameters.Options = FVector4(Decal->GetOpacity(), Decal->ReceivesLighting() ? 1.0f : 0.0f, 0.0f, 0.0f);
+						Parameters.ShadowFlags = FVector4(Decal->ReceivesShadow() ? 1.0f : 0.0f, ForwardShadowMask ? 1.0f : 0.0f, 0.0f, 0.0f);
+						Parameters.SpecularColorShininess = FVector4(0.04f, 0.04f, 0.04f, 32.0f);
+						RenderCommand::UpdateBufferData(Renderer->GetDecalViewConstants(), &ViewConstants, sizeof(ViewConstants));
+						RenderCommand::UpdateBufferData(Renderer->GetDecalParameters(), &Parameters, sizeof(Parameters));
+						RenderCommand::BindConstantBuffer(4, Renderer->GetDecalViewConstants(), EShaderBindFlagBits::Pixel);
+						RenderCommand::BindConstantBuffer(5, Renderer->GetDecalParameters(), EShaderBindFlagBits::Pixel);
+						RenderCommand::BindShaderResource(2, Decal->GetTexture(), EShaderBindFlagBits::Pixel);
+						for (const FPrimitiveSceneProxy* Receiver : Entry.Receivers)
+						{
+							const auto It = ReceiverItems.find(Receiver);
+							if (It == ReceiverItems.end()) continue;
+							for (const auto& [BatchIndex, ItemIndex] : It->second)
+							{
+								FMeshDrawBatch Batch = ForwardBatches[BatchIndex];
+								Batch.Items.Reset();
+								Batch.Items.Add(ForwardBatches[BatchIndex].Items[ItemIndex]);
+								Batch.Pipeline.Shader = Shader;
+								Batch.Pipeline.BlendState = EBlendState::AlphaBlend;
+								Batch.Pipeline.DepthStencilState = EDepthStencilState::ReadOnly;
+								Batch.Pipeline.RasterizerState = ERasterizerState::SolidBack;
+								Batch.bForceWireframe = false;
+								if (Batch.Textures.Num() > 2) Batch.Textures.SetNum(2);
+								if (Batch.MaterialDataSize == sizeof(FForwardMaterialConstants))
+								{
+									FForwardMaterialConstants Material{};
+									std::memcpy(&Material, Batch.MaterialData.data(), sizeof(Material));
+									Material.SpecularColorShininess = Parameters.SpecularColorShininess;
+									std::memcpy(Batch.MaterialData.data(), &Material, sizeof(Material));
+								}
+								Renderer->DrawMeshes(std::span<const FMeshDrawBatch>(&Batch, 1));
+								++RenderData.RenderStats.DecalDrawCalls;
+							}
+						}
+					}
+					if (bTimed) RenderData.DecalGpuTimer.End();
+					RenderCommand::UnbindShaderResources(2, 1, EShaderBindFlagBits::Pixel);
+					RenderCommand::BindConstantBuffer(4, nullptr, EShaderBindFlagBits::Pixel);
+					RenderCommand::BindConstantBuffer(5, nullptr, EShaderBindFlagBits::Pixel);
 					UnbindForwardLighting(Renderer);
 				})) return false;
 		}
@@ -888,8 +1031,12 @@ bool FSceneRenderer::Render(FRenderer* Renderer, FSceneViewTargets& Targets, con
 	if (ExtraPasses) ExtraPasses(Callbacks);
 
 	FRenderGraphBuilder Graph;
-	if (!AddViewportPasses(Graph, Renderer, Targets, Options, Renderer->GetSkybox(), Callbacks) ||
-		!Graph.Execute() || !DidCorePassSucceed() || !DidFXAAPassSucceed())
+	if (!AddViewportPasses(Graph, Renderer, Targets, Options, Renderer->GetSkybox(), Callbacks))
+		return false;
+	const bool bFrameTimed = FStatOverlay::IsEnabled(EStatFlags::Decal) && RenderData.FrameGpuTimer.Begin();
+	const bool bGraphSucceeded = Graph.Execute();
+	if (bFrameTimed) RenderData.FrameGpuTimer.End();
+	if (!bGraphSucceeded || !DidCorePassSucceed() || !DidFXAAPassSucceed())
 		return false;
 	if (bUseFXAA && !Targets.SwapSceneColorAndBind(FXAA->GetOutputTarget()))
 		return false;
@@ -1139,9 +1286,10 @@ void FSceneRenderer::GatherRenderPackets(FScene& Scene, FSceneRenderData& Data,
 				// continue 없이 항상 여기까지 와서 새 패킷에 여유 칸을 배정한다.
 				for (uint32 p = FirstNew; p < RenderQueue.Num(); ++p)
 				{
-					if (!bPrepareObjectSlots || NextExtraSlot >= MaxSlots) break;
 					FRenderPacket& Packet = RenderQueue[p];
-					const FMatrix& Model = Packet.Proxy ? Packet.Proxy->GetLocalToWorld() : Packet.Model ? *Packet.Model : FMatrix::Identity;
+					if (!Packet.Proxy) Packet.Proxy = Proxy;
+					if (!bPrepareObjectSlots || NextExtraSlot >= MaxSlots) continue;
+					const FMatrix& Model = Packet.Model ? *Packet.Model : Proxy->GetLocalToWorld();
 					Data.ObjectConstants[NextExtraSlot] = MakePerObjectConstants(Model);
 					Packet.Slot = NextExtraSlot++;
 				}

@@ -55,6 +55,7 @@ public:
 
 	static FPipelineState* GetPSO(const EPSOType& InType);
 	static FShaderProgram* GetForwardShaderProgram(ELightingModel Model);
+	static FShaderProgram* GetMeshDecalShaderProgram();
 	static FShaderProgram* GetShadowDepthShaderProgram();
 private:
 	

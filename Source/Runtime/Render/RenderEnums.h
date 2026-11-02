@@ -15,6 +15,12 @@ enum class ERenderingPath
     Deferred
 };
 
+enum class EDecalRenderMethod
+{
+	DrawDecalVolume,
+	DrawMeshAgain
+};
+
 enum class ELightingModel
 {
     Gouraud,

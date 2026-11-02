@@ -25,6 +25,7 @@ bool FProjectedDecalRenderer::Init(FRenderer* InRenderer)
 
 	if (!BasePipeline ||
 		!BasePipeline->Shader ||
+		!BasePipeline->Shader->VertexShader ||
 		!BasePipeline->Shader->PixelShader)
 	{
 		return false;
@@ -50,10 +51,10 @@ bool FProjectedDecalRenderer::Init(FRenderer* InRenderer)
 	// 임시 테스트 설정
 	TestSettings.Transform.Location =
 		FVector(0.0f, 0.0f, 0.0f);
-	
+
 	TestSettings.Transform.Rotation =
 		FRotator(0.0f, 0.0f, 0.0f);
-	
+
 	TestSettings.Transform.Scale =
 		FVector(5.0f, 10.0f, 10.0f);
 
@@ -181,7 +182,7 @@ bool FProjectedDecalRenderer::OnRender(
 		4,
 		ConstantBuffer.get(),
 		EShaderBindFlagBits::Pixel);
-	
+
 
 	RenderCommand::BindShaderResource(
 		0,
@@ -197,12 +198,12 @@ bool FProjectedDecalRenderer::OnRender(
 
 		// Prepass와 같은 VS를 사용한다.
 		// Lambert VS의 TEXCOORD1이 월드 위치.
-		FShaderProgram DecalProgram(
-			SourceBatch.Pipeline.Shader->VertexShader,
-			PipelineState.Shader->PixelShader);
+		//FShaderProgram DecalProgram(
+		//	SourceBatch.Pipeline.Shader->VertexShader,
+		//	PipelineState.Shader->PixelShader);
 
 		Batch.Pipeline = PipelineState;
-		Batch.Pipeline.Shader = &DecalProgram;
+		//Batch.Pipeline.Shader = &DecalProgram;
 
 		// 원본 표면과 같은 컬링, 래스터 규칙을 유지한다.
 		Batch.Pipeline.RasterizerState =
@@ -228,17 +229,17 @@ bool FProjectedDecalRenderer::OnRender(
 		// 재사용하는 VS의 UVTransform 등도 기존 값으로 바인딩한다.
 		Renderer->DrawMeshes(
 			std::span<const FMeshDrawBatch>(&Batch, 1));
-
-		RenderCommand::BindConstantBuffer(
-			4,
-			nullptr,
-			EShaderBindFlagBits::Pixel);
-
-		RenderCommand::UnbindShaderResources(
-			0,
-			1,
-			EShaderBindFlagBits::Pixel);
-		
-		return true;
 	}
+
+	RenderCommand::BindConstantBuffer(
+		4,
+		nullptr,
+		EShaderBindFlagBits::Pixel);
+
+	RenderCommand::UnbindShaderResources(
+		0,
+		1,
+		EShaderBindFlagBits::Pixel);
+
+	return true;
 }

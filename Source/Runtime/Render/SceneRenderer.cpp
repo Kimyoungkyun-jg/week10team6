@@ -18,6 +18,7 @@
 #include "Render/PostProcess/CameraOverlayRenderer.h"
 #include "Render/PostProcess/FXAARenderer.h"
 #include "Render/PostProcess/ToneMapData.h"
+#include "Render/Decal/ProjectedDecalRenderer.h"
 #include "Text/TextRenderer.h"
 #include "UObject/UObjectIterator.h"
 
@@ -287,6 +288,11 @@ void FSceneRenderer::UnbindForwardLighting(FRenderer* Renderer)
 	RenderCommand::UnbindShaderResources(11, 1, EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
 }
 
+void FSceneRenderer::UnbindForwardDecal(FRenderer* Renderer)
+{
+	RenderCommand::UnbindShaderResources(14, 1, EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
+}
+
 bool FSceneRenderer::AddWorldNormalPass(FRenderGraphBuilder& Graph, FRenderer* Renderer,
 	FSceneViewTargets& Targets, const FSceneRenderOptions& Options)
 {
@@ -504,6 +510,43 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			if (!Processor.Build(View, RenderData.RenderQueue, &RenderData,
 				EMeshPassType::Forward, ForwardBatches, Options.LightingModel)) return false;
 		}
+
+		// 데칼 패스 확인
+		FProjectedDecalRenderer* DecalRenderer = Renderer->GetProjectedDecal();
+		
+		// 그래프 실행 중 설정이 바뀌어도 이번 뷰는 같은 값을 사용한다.
+		const FProjectedDecalTestSettings DecalSettings =
+			DecalRenderer
+			? DecalRenderer->GetTestSettings()
+			: FProjectedDecalTestSettings{};
+
+		const bool bNeedsDBuffer =
+			DecalRenderer &&
+			DecalSettings.bEnabled &&
+			DecalSettings.TintOpacity.W > 0.0f &&
+			Options.bDrawPrimitives &&
+			!View.bIsWireframe &&
+			!ForwardBatches.IsEmpty();
+
+		if (bNeedsDBuffer &&
+			(!DecalRenderer->IsReady() ||
+				!IsValidProjectedDecalTransform(DecalSettings)))
+		{
+			return false;
+		}
+
+		// 비활성 상태에서도 투명한 DBuffer를 Forward에 전달한다.
+		const FRenderGraphTextureRef DBufferColor =
+			Graph.CreateTexture(
+				{
+					Width,
+					Height,
+					ETextureFormat::R8G8B8A8_UNorm
+				},
+				"DBufferColor");
+
+		if (!DBufferColor) return false;
+
 		// 현재 업로드된 광원 정보를 기존 그리드에 전달한다.
 		FForwardLightTileGrid& Tiles = RenderData.ViewLightResources.GetTiles();
 		FStructuredBuffer* SceneLights = RenderData.ViewLightResources.GetSceneLights();
@@ -523,7 +566,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 		const bool bNeedsLightCulling = bGridPrepared && CullingMode != ELightCullingMode::Off && (RenderData.HasSpotLights() || RenderData.HasPointLights());
 		// 그림자 마스크는 장면 깊이로 Projection하므로 프리패스가 필요하다. Gouraud는 FinalizeShadowLights가 채널을 주지 않는다.
 		const bool bForwardShadows = Options.bDrawPrimitives && ShadowAtlasRef && !ShadowedLights.IsEmpty();
-		if (bNeedsLightCulling || bForwardShadows)
+		if (bNeedsLightCulling || bForwardShadows || bNeedsDBuffer)
 		{
 			FPipelineState* DepthPipeline = FRenderResourceManager::GetPSO(EPSOType::StaticMesh_DepthOnly);
 			if (!DepthPipeline || !DepthPipeline->Shader || !DepthPipeline->Shader->PixelShader) return false;
@@ -589,8 +632,55 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 				})) 
 				return false;
 		}
+
+		// 데칼 패스
+		{
+			FRenderGraphRasterPassDesc DecalPass{};
+			DecalPass.Name = "DBufferDecal";
+
+			DecalPass.ColorAttachments = {
+				{
+					DBufferColor,
+					ERenderGraphLoadAction::Clear,
+					{ 0.0f, 0.0f, 0.0f, 0.0f }
+				}
+			};
+
+			if (bNeedsDBuffer)
+			{
+				DecalPass.DepthAttachment = {
+					Depth,
+					ERenderGraphLoadAction::Load,
+					1.0f, 0
+				};
+			}
+
+			if (!Graph.AddRasterPass(
+				std::move(DecalPass),
+				[
+					this,
+					DecalRenderer,
+					DecalSettings,
+					bNeedsDBuffer
+				]
+				{
+					if (!bCorePassSucceeded || !bNeedsDBuffer)
+						return;
+
+					bCorePassSucceeded =
+						DecalRenderer->OnRender(
+							ForwardBatches,
+							DecalSettings);
+				}))
+			{
+				return false;
+			}
+		}
+
 		FRenderGraphRasterPassDesc Forward{};
 		Forward.Name = "ForwardOpaque";
+		Forward.ReadTextures = { DBufferColor };
+		Forward.ReadTextureStartSlot = 14;
 		Forward.ColorAttachments = {
 			{ LightingHDR, ERenderGraphLoadAction::Load }
 		};
@@ -608,6 +698,8 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 				}
 			}
 			Renderer->DrawMeshes(ForwardBatches);
+
+			UnbindForwardDecal(Renderer);
 			UnbindForwardLighting(Renderer);
 		})) return false;
 	}

@@ -288,8 +288,15 @@ bool FRenderGraphBuilder::Execute() // 등록되어 있던
 
 		RenderCommand::SetRenderTargets(static_cast<uint32>(Pass.Desc.ColorAttachments.size()), ColorTargets,
 			Depth, Pass.Desc.DepthAttachment.DSVIndex);
-		for (uint32 Slot = 0; Slot < Pass.Desc.ReadTextures.size(); ++Slot)
-			RenderCommand::BindShaderResource(Slot, Resolve(Pass.Desc.ReadTextures[Slot]), EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
+		for (uint32 Index = 0; Index < Pass.Desc.ReadTextures.size(); ++Index)
+		{
+			const uint32 Slot = Pass.Desc.ReadTextureStartSlot + Index;
+
+			RenderCommand::BindShaderResource(
+				Slot,
+				Resolve(Pass.Desc.ReadTextures[Index]),
+				EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
+		}
 
 		FShadowAtlasRect Viewport = Pass.Desc.Viewport;
 		if (Viewport.Width == 0)

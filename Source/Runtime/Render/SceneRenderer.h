@@ -95,6 +95,7 @@ private:
 	bool BindDeferredLighting(FRenderer* Renderer, uint32 Width, uint32 Height, int32 SingleLightIndex);
 	bool BindForwardLighting(FRenderer* Renderer, const FSceneRenderOptions& Options, FTexture2D* ShadowMask);
 	void UnbindForwardLighting(FRenderer* Renderer);
+	void UnbindForwardDecal(FRenderer* Renderer);
 	bool IntersectSphereFrustum(const FVector4& PositionRadius, const FPlane (&Planes)[6]) const;
 
 	// ---------- 언리얼 구조 그림자 (ShadowSetup.cpp) ----------

@@ -20,7 +20,6 @@ public:
 	// 호출 전제:
 	// 1. DBuffer RTV가 바인딩되어 있다.
 	// 2. Prepass Detpth가 DSV로 바인딩되어 있다.
-	// 3. ReceiverBatches는 Lambert Forward 배치다.
 	//
 	// 렌더 타깃 설정과 Clear는 RenderGraphs가 담당한다.
 	bool OnRender(

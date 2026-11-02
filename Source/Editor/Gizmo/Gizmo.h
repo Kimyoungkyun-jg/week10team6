@@ -4,6 +4,7 @@
 #include "Math/Transform.h"
 #include "Components/SceneComponent.h"
 #include "Components/LocalLightComponent.h"
+#include <functional>
 
 class UCameraComponent;
 
@@ -28,7 +29,17 @@ public:
 	{ 
 		Target = InTarget; 
 		bUseActorBounds = InbUseActorBounds; 
+		TargetTransform = nullptr;
+		OnTransformChanged = nullptr;
 	}
+	void SetTarget(FTransform* InTransform, std::function<void(const FTransform&)> InOnChanged = nullptr)
+	{
+		Target = nullptr;
+		TargetTransform = InTransform;
+		OnTransformChanged = InOnChanged;
+		bUseActorBounds = false;
+	}
+	bool HasTarget() const { return Target != nullptr || TargetTransform != nullptr; }
 	USceneComponent* GetTarget() const { return Target; }
 
 	// Gizmo 모드(이동, 회전, 크기)
@@ -58,10 +69,10 @@ public:
 
 	float ComputeAngleOnPlane(const FVector& Point, int Axis) const;
 
-	inline FTransform GetTransform() const { return Target ? Target->GetTransform() : FTransform(); }
-	inline FVector GetLocation() const { return Target ? Target->GetRelativeLocation() : FVector(0, 0, 0); }
-	inline FRotator GetRotation() const { return Target ? Target->GetRelativeRotation() : FRotator(0, 0, 0); }
-	inline FVector GetScale() const { return Target ? Target->GetRelativeScale3D() : FVector(0, 0, 0); }
+	inline FTransform GetTransform() const { return Target ? Target->GetTransform() : (TargetTransform ? *TargetTransform : FTransform()); }
+	inline FVector GetLocation() const { return Target ? Target->GetRelativeLocation() : (TargetTransform ? TargetTransform->Location : FVector(0, 0, 0)); }
+	inline FRotator GetRotation() const { return Target ? Target->GetRelativeRotation() : (TargetTransform ? TargetTransform->Rotation : FRotator(0, 0, 0)); }
+	inline FVector GetScale() const { return Target ? Target->GetRelativeScale3D() : (TargetTransform ? TargetTransform->Scale : FVector(1, 1, 1)); }
 
 	FVector GetRenderLocation() const;
 	// 원근 View에서만 카메라 거리에 맞춰 크기 보정 위치를 구하고 직교 View는 월드 위치를 유지한다.
@@ -74,6 +85,9 @@ private:
 	FTransform Transform = FTransform();
 	USceneComponent* Target = nullptr;
 	bool bUseActorBounds = false;
+	// 컴포넌트가 아닌 Transform만을 대상으로 하는 경우, TargetTransform을 설정하고 OnTransformChanged 콜백을 통해 Transform 변경 시 알림을 받는다.
+	FTransform* TargetTransform = nullptr;
+	std::function<void(const FTransform&)> OnTransformChanged = nullptr;
 
 	int HoveredAxis = -1;
 	int DraggingAxis = -1;

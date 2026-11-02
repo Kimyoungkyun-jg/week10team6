@@ -6,7 +6,6 @@
 #include "Render/RenderCommand.h"
 #include "Render/RenderResourceManager.h"
 
-#include <array>
 
 bool FProjectedDecalRenderer::Init(FRenderer* InRenderer)
 {
@@ -43,11 +42,6 @@ bool FProjectedDecalRenderer::Init(FRenderer* InRenderer)
 		return false;
 	}
 
-	if (!CreateTestTexture())
-	{
-		return false;
-	}
-
 	return IsReady();
 }
 
@@ -59,72 +53,7 @@ bool FProjectedDecalRenderer::IsReady() const
 		PipelineState.Shader->VertexShader &&
 		PipelineState.Shader->PixelShader &&
 		ConstantBuffer &&
-		ConstantBuffer->GetBuffer() &&
-		TestTexture &&
-		TestTexture->GetRawPtr() &&
-		TestTexture->GetSRV();
-}
-
-bool FProjectedDecalRenderer::CreateTestTexture()
-{
-	constexpr uint32 TextureSize = 32;
-	std::array<uint8, TextureSize* TextureSize * 4> Pixels{};
-
-	for (uint32 Y = 0; Y < TextureSize; ++Y)
-	{
-		for (uint32 X = 0; X < TextureSize; ++X)
-		{
-			const float U =
-				(static_cast<float>(X) + 0.5f) /
-				static_cast<float>(TextureSize);
-
-			const float V =
-				(static_cast<float>(Y) + 0.5f) /
-				static_cast<float>(TextureSize);
-
-			const float DX = U - 0.5f;
-			const float DY = V - 0.5f;
-
-			const bool bInsideCircle =
-				DX * DX + DY * DY < 0.45f * 0.45f;
-
-			const bool bChecker =
-				((X / 4 + Y / 4) & 1u) != 0;
-
-			const uint32 Offset =
-				(Y * TextureSize + X) * 4;
-
-			Pixels[Offset + 0] = 255;
-			Pixels[Offset + 1] = bChecker ? 210 : 40;
-			Pixels[Offset + 2] = 20;
-			Pixels[Offset + 3] =
-				bInsideCircle ? 255 : 0;
-		}
-	}
-
-	FTextureDesc Desc{};
-	Desc.Width = TextureSize;
-	Desc.Height = TextureSize;
-	Desc.MipLevels = 1;
-
-	Desc.Format =
-		ETextureFormat::R8G8B8A8_UNorm_SRGB;
-
-	Desc.BindFlags =
-		ETextureBindFlags::ShaderResource;
-
-	Desc.Usage =
-		ETextureUsage::Immutable;
-
-	TestTexture =
-		RenderCommand::CreateTexture2D(
-			Desc,
-			Pixels.data());
-
-	return
-		TestTexture &&
-		TestTexture->GetRawPtr() &&
-		TestTexture->GetSRV();
+		ConstantBuffer->GetBuffer();
 }
 
 bool FProjectedDecalRenderer::OnRender(
@@ -156,23 +85,20 @@ bool FProjectedDecalRenderer::OnRender(
 		}
 	}
 
-	// 현재는 모든 데칼이 같은 테스트 패턴을 사용한다.
 	RenderCommand::BindConstantBuffer(
 		4,
 		ConstantBuffer.get(),
 		EShaderBindFlagBits::Pixel);
 
-
-	RenderCommand::BindShaderResource(
-		0,
-		TestTexture.get(),
-		EShaderBindFlagBits::Pixel);
-
 	// SortOrder로 정렬된 순서.
 	for (const FProjectedDecalRenderData& Decal : Decals)
 	{
-		if (!IsValidProjectedDecalRenderData(Decal))
+		if (!IsValidProjectedDecalRenderData(Decal) ||
+			!Decal.ColorTexture ||
+			!Decal.ColorTexture->GetSRV())
+		{
 			continue;
+		}
 
 		const FProjectedDecalConstants Constants =
 			MakeProjectedDecalConstants(Decal);
@@ -182,6 +108,11 @@ bool FProjectedDecalRenderer::OnRender(
 			&Constants,
 			sizeof(Constants));
 
+		// 데칼마다 다른 머티리얼 텍스처.
+		RenderCommand::BindShaderResource(
+			0,
+			Decal.ColorTexture,
+			EShaderBindFlagBits::Pixel);
 
 		for (const FMeshDrawBatch& SourceBatch : ReceiverBatches)
 		{
@@ -190,6 +121,7 @@ bool FProjectedDecalRenderer::OnRender(
 
 			FMeshDrawBatch Batch = SourceBatch;
 
+			// 머티리얼의 PSO를 사용하지 않는다.
 			Batch.Pipeline = PipelineState;
 
 			// 원본 표면과 같은 컬링, 래스터 규칙을 유지한다.

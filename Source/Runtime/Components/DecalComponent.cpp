@@ -5,8 +5,37 @@
 #include <cmath>
 
 #include "Render/LineBatcher.h"
+#include "Render/Material.h"
+#include "Render/Texture2D.h"
 #include "UObject/UObjectIterator.h"
 #include "GameFramework/Actor.h"
+
+namespace
+{
+	bool IsSRGBView(FTexture2D* Texture)
+	{
+		if (!Texture || !Texture->GetSRV())
+			return false;
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC Desc{};
+		Texture->GetSRV()->GetDesc(&Desc);
+
+		switch (Desc.Format)
+		{
+		case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+		case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+		case DXGI_FORMAT_B8G8R8X8_UNORM_SRGB:
+		case DXGI_FORMAT_BC1_UNORM_SRGB:
+		case DXGI_FORMAT_BC2_UNORM_SRGB:
+		case DXGI_FORMAT_BC3_UNORM_SRGB:
+		case DXGI_FORMAT_BC7_UNORM_SRGB:
+			return true;
+
+		default:
+			return false;
+		}
+	}
+}
 
 UDecalComponent::UDecalComponent()
 {
@@ -21,19 +50,33 @@ UDecalComponent::UDecalComponent()
 bool UDecalComponent::TryGetRenderData(
 	FProjectedDecalRenderData& OutRenderData) const
 {
-	if (!bDecalEnabled)
+	if (!bDecalEnabled || !DecalMaterial)
 		return false;
 
-	if (!std::isfinite(TintOpacity.X) ||
-		!std::isfinite(TintOpacity.Y) ||
-		!std::isfinite(TintOpacity.Z) ||
-		!std::isfinite(TintOpacity.W))
+	if (DecalMaterial->Textures.IsEmpty())
+		return false;
+
+	UTexture2D* TextureAsset =
+		DecalMaterial->Textures[0];
+
+	FTexture2D* Texture =
+		TextureAsset ? TextureAsset->GetResource() : nullptr;
+	if (!Texture || !Texture->GetSRV())
+		return false;
+
+	const FVector4& MaterialColor =
+		DecalMaterial->BaseColor;
+
+	if (!std::isfinite(MaterialColor.X) ||
+		!std::isfinite(MaterialColor.Y) ||
+		!std::isfinite(MaterialColor.Z) ||
+		!std::isfinite(MaterialColor.W))
 	{
 		return false;
 	}
 
 	const float Opacity =
-		std::clamp(TintOpacity.W, 0.0f, 1.0f);
+		std::clamp(MaterialColor.W, 0.0f, 1.0f);
 
 	if (Opacity <= 0.0f)
 		return false;
@@ -59,10 +102,21 @@ bool UDecalComponent::TryGetRenderData(
 	Data.DecalToWorld = GetWorldMatrix();
 
 	Data.TintOpacity = FVector4(
-		std::max(0.0f, TintOpacity.X),
-		std::max(0.0f, TintOpacity.Y),
-		std::max(0.0f, TintOpacity.Z),
+		std::max(0.0f, MaterialColor.X),
+		std::max(0.0f, MaterialColor.Y),
+		std::max(0.0f, MaterialColor.Z),
 		Opacity);
+
+	Data.ColorTexture = Texture;
+	Data.Sampler = DecalMaterial->SamplerState;
+
+	// 일반 색상 샘플링에 비교 샘플러는 사용하지 않는다.
+	if (Data.Sampler == ESamplerState::ShadowComparison)
+	{
+		Data.Sampler = ESamplerState::LinearClamp;
+	}
+
+	Data.bDecodeSRGB = !IsSRGBView(Texture);
 
 	Data.SortOrder = SortOrder;
 	Data.ComponentID = GetUUID();
@@ -93,5 +147,21 @@ void DrawDecalVolume(UWorld* World, FLineBatcher* LineBatcher, const AActor* Sel
 			Decal->CalcLocalBounds(),
 			Decal->GetWorldMatrix(),
 			FVector4(0.0f, 1.0f, 1.0f, 1.0f));
+	}
+}
+
+void UDecalComponent::Serialize(
+	FStructuredArchive::FRecord Record)
+{
+	Super::Serialize(Record);
+
+	// 기존 데칼이 저장된 씬에 이 필드강 없어도 읽을 수 있게 한다.
+	auto MaterialSlot = Record.TryEnterField("DecalMaterial", true);
+
+	if (MaterialSlot.IsSet())
+	{
+		UMaterial::SerializeMaterialReference(
+			MaterialSlot.GetValue(),
+			DecalMaterial);
 	}
 }

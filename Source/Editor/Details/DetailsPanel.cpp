@@ -18,6 +18,7 @@
 #include "Components/RotatingMovementComponent.h"
 #include "Components/ProjectileMovementComponent.h"
 #include "Components/FireBallComponent.h"
+#include "Components/DecalComponent.h"
 #include "Asset/AssetManager.h"
 #include "Render/Material.h"
 #include "Render/Texture2D.h"
@@ -242,6 +243,102 @@ namespace
 			ImGui::TextDisabled("(비어 있음)");
 		}
 		ImGui::EndGroup();
+
+		ImGui::PopID();
+	}
+
+	void DrawDecalMaterial(UDecalComponent* Decal)
+	{
+		if (!Decal)
+			return;
+
+		ImGui::PushID(Decal);
+
+		if (ImGui::CollapsingHeader(
+			"Decal Material",
+			ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			UMaterial* Material = Decal->GetDecalMaterial();
+
+			const UMaterial* Base =
+				Material ? Material->GetBaseAsset() : nullptr;
+
+			const FString Preview =
+				Base ? Base->GetPath() :
+				Material ? FString("(Instance)") :
+				FString("(None)");
+
+			if (ImGui::BeginCombo(
+				"Material",
+				Preview.c_str()))
+			{
+				if (ImGui::Selectable(
+					"(None)",
+					Material == nullptr))
+				{
+					Decal->SetDecalMaterial(nullptr);
+				}
+
+				for (TObjectIterator<UMaterial> It; It; ++It)
+				{
+					UMaterial* Candidate = *It;
+
+					if (!Candidate ||
+						Candidate->bIsInstance ||
+						Candidate->GetPath().empty())
+					{
+						continue;
+					}
+
+					const bool bSelected =
+						Candidate == Material ||
+						Candidate == Base;
+
+					if (ImGui::Selectable(
+						Candidate->GetPath().c_str(),
+						bSelected))
+					{
+						Decal->SetDecalMaterial(Candidate);
+					}
+				}
+
+				ImGui::EndCombo();
+			}
+
+			Material = Decal->GetDecalMaterial();
+
+			// 기존 함수는 텍스처 변경 시 공유 에셋을 복제해
+			// 컴포넌트 전용 머티리얼 인스턴스로 바꾼다.
+			DrawTextureSlot(&Material, 0);
+			Decal->SetDecalMaterial(Material);
+
+			if (Material)
+			{
+				FVector4 Color = Material->BaseColor;
+
+				if (ImGui::ColorEdit4(
+					"Material BaseColor",
+					&Color.X))
+				{
+					if (!Material->bIsInstance)
+					{
+						Material =
+							UMaterial::CreateInstance(Material);
+					}
+
+					if (Material)
+					{
+						Material->BaseColor = Color;
+						Decal->SetDecalMaterial(Material);
+					}
+				}
+
+				if (ImGui::Button("Clear Material"))
+				{
+					Decal->SetDecalMaterial(nullptr);
+				}
+			}
+		}
 
 		ImGui::PopID();
 	}
@@ -1012,6 +1109,10 @@ void FDetailsPanel::OnRender()
 			if (UMeshComponent* MeshComponent = Cast<UMeshComponent>(TargetComponent))
 			{
 				DrawMaterialSlots(MeshComponent);
+			}
+			if (UDecalComponent* DecalComponent = Cast<UDecalComponent>(TargetComponent))
+			{
+				DrawDecalMaterial(DecalComponent);
 			}
 			ImGui::PopID();
 

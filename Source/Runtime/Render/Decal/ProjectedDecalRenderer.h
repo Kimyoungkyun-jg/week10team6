@@ -26,8 +26,6 @@ public:
 		std::span<const FMeshDrawBatch> ReceiverBatches,
 		std::span<const FProjectedDecalRenderData> Decals);
 private:
-	bool CreateTestTexture();
-
 	// 비소유 포인터.
 	FRenderer* Renderer = nullptr;
 
@@ -35,5 +33,4 @@ private:
 	FPipelineState PipelineState;
 
 	TUniquePtr<FConstantBuffer> ConstantBuffer;
-	TUniquePtr<FTexture2D> TestTexture;
 };

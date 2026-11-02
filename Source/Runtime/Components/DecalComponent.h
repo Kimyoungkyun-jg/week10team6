@@ -2,6 +2,7 @@
 
 #include "Components/SceneComponent.h"
 #include "Render/Decal/ProjectedDecal.h"
+#include "Render/Material.h"
 
 #include "DecalComponent.generated.h"
 
@@ -27,10 +28,10 @@ public:
 		bDecalEnabled = bInEnabled;
 	}
 
-	void SetTintOpacity(const FVector4& InTintOpacity)
-	{
-		TintOpacity = InTintOpacity;
-	}
+	//void SetTintOpacity(const FVector4& InTintOpacity)
+	//{
+	//	TintOpacity = InTintOpacity;
+	//}
 
 	int32 GetSortOrder() const
 	{
@@ -40,6 +41,16 @@ public:
 	void SetSortOrder(int32 InSortOrder)
 	{
 		SortOrder = InSortOrder;
+	}
+
+	UMaterial* GetDecalMaterial() const
+	{
+		return DecalMaterial;
+	}
+
+	void SetDecalMaterial(UMaterial* InMaterial)
+	{
+		DecalMaterial = InMaterial;
 	}
 
 	FBox CalcLocalBounds() const override
@@ -55,15 +66,20 @@ public:
 	bool TryGetRenderData(
 		FProjectedDecalRenderData& OutRenderData) const;
 
+	using Super::Serialize;
+	void Serialize(FStructuredArchive::FRecord Record) override;
+
 private:
 	UPROPERTY(EditAnywhere)
 	bool bDecalEnabled = true;
 
-	UPROPERTY(EditAnywhere, Type=LinearColor)
-	FVector4 TintOpacity =
-		FVector4(1.0f, 1.0f, 1.0f, 0.8f);
+	//UPROPERTY(EditAnywhere, Type=LinearColor)
+	//FVector4 TintOpacity =
+	//	FVector4(1.0f, 1.0f, 1.0f, 0.8f);
 
 	UPROPERTY(EditAnywhere)
 	int32 SortOrder = 0;
+
+	UMaterial* DecalMaterial = nullptr;
 };
 

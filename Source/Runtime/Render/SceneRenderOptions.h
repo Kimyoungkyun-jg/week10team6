@@ -29,4 +29,5 @@ struct FSceneRenderOptions
 
 	ERenderingPath RenderingPath = ERenderingPath::Deferred;
 	ELightingModel LightingModel = ELightingModel::Gouraud;
+	EDecalRenderMethod DecalRenderMethod = EDecalRenderMethod::MeshRerendering;
 };

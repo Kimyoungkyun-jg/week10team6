@@ -14,10 +14,12 @@
 #include "Render/SkyLightEnvironment.h"
 #include "Engine/SceneManagement.h"
 #include "Components/ExponentialHeightFogComponent.h"
+#include "Components/DecalComponent.h"
 #include "Render/PostProcess/HeightFogRenderer.h"
 #include "Render/PostProcess/CameraOverlayRenderer.h"
 #include "Render/PostProcess/FXAARenderer.h"
 #include "Render/PostProcess/ToneMapData.h"
+#include "Render/Decal/ProjectedDecalRenderer.h"
 #include "Text/TextRenderer.h"
 #include "UObject/UObjectIterator.h"
 
@@ -287,6 +289,11 @@ void FSceneRenderer::UnbindForwardLighting(FRenderer* Renderer)
 	RenderCommand::UnbindShaderResources(11, 1, EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
 }
 
+void FSceneRenderer::UnbindForwardDecal(FRenderer* Renderer)
+{
+	RenderCommand::UnbindShaderResources(14, 1, EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
+}
+
 bool FSceneRenderer::AddWorldNormalPass(FRenderGraphBuilder& Graph, FRenderer* Renderer,
 	FSceneViewTargets& Targets, const FSceneRenderOptions& Options)
 {
@@ -504,6 +511,49 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			if (!Processor.Build(View, RenderData.RenderQueue, &RenderData,
 				EMeshPassType::Forward, ForwardBatches, Options.LightingModel)) return false;
 		}
+
+		// 데칼 패스 확인
+		GatherProjectedDecals();
+		FProjectedDecalRenderer* DecalRenderer = Renderer->GetProjectedDecal();
+		
+		// 그래프 실행 중 설정이 바뀌어도 이번 뷰는 같은 값을 사용한다.
+		//const FProjectedDecalTestSettings DecalSettings =
+		//	DecalRenderer
+		//	? DecalRenderer->GetTestSettings()
+		//	: FProjectedDecalTestSettings{};
+
+		const bool bNeedsDBuffer =
+			Options.bDrawPrimitives &&
+			!View.bIsWireframe &&
+			!ForwardBatches.IsEmpty() &&
+			!VisibleDecals.IsEmpty();
+
+		if (bNeedsDBuffer &&
+			(!DecalRenderer || !DecalRenderer->IsReady()))
+		{
+			return false;
+		}
+
+		// 비활성 상태에서도 투명한 DBuffer를 Forward에 전달한다.
+		const FRenderGraphTextureRef DBufferLit =
+			Graph.CreateTexture(
+				{
+					Width,
+					Height,
+					ETextureFormat::R8G8B8A8_UNorm
+				},
+				"DBufferLit");
+		const FRenderGraphTextureRef DBufferUnlit =
+			Graph.CreateTexture(
+				{
+					Width,
+					Height,
+					ETextureFormat::R8G8B8A8_UNorm
+				},
+				"DBufferUnlit");
+
+		if (!DBufferLit || !DBufferUnlit) return false;
+
 		// 현재 업로드된 광원 정보를 기존 그리드에 전달한다.
 		FForwardLightTileGrid& Tiles = RenderData.ViewLightResources.GetTiles();
 		FStructuredBuffer* SceneLights = RenderData.ViewLightResources.GetSceneLights();
@@ -523,7 +573,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 		const bool bNeedsLightCulling = bGridPrepared && CullingMode != ELightCullingMode::Off && (RenderData.HasSpotLights() || RenderData.HasPointLights());
 		// 그림자 마스크는 장면 깊이로 Projection하므로 프리패스가 필요하다. Gouraud는 FinalizeShadowLights가 채널을 주지 않는다.
 		const bool bForwardShadows = Options.bDrawPrimitives && ShadowAtlasRef && !ShadowedLights.IsEmpty();
-		if (bNeedsLightCulling || bForwardShadows)
+		if (bNeedsLightCulling || bForwardShadows || bNeedsDBuffer)
 		{
 			FPipelineState* DepthPipeline = FRenderResourceManager::GetPSO(EPSOType::StaticMesh_DepthOnly);
 			if (!DepthPipeline || !DepthPipeline->Shader || !DepthPipeline->Shader->PixelShader) return false;
@@ -589,8 +639,87 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 				})) 
 				return false;
 		}
+
+		// 데칼 패스
+		{
+			const bool bUseDepthReconstruction =
+				Options.DecalRenderMethod == EDecalRenderMethod::DepthReconstruction;
+			auto AddDecalPass =
+				[&](FRenderGraphTextureRef Output, bool bUnlitPass)
+				{
+					FRenderGraphRasterPassDesc DecalPass{};
+					DecalPass.Name = bUnlitPass ? "DBufferUnlit" : "DBufferLit";
+					DecalPass.ColorAttachments = {
+						{
+							Output,
+							ERenderGraphLoadAction::Clear,
+							{ 0.0f, 0.0f, 0.0f, 0.0f }
+						}
+					};
+					if (bNeedsDBuffer)
+					{
+						if (bUseDepthReconstruction)
+						{
+							// Depth는 입력으로만 사용한다.
+							DecalPass.ReadTextures = { Depth };
+							DecalPass.ReadTextureStartSlot = 1;
+						}
+						else
+						{
+							// 메시 방식은 Depth Equal 검사에 사용한다.
+							DecalPass.DepthAttachment = {
+								Depth,
+								ERenderGraphLoadAction::Load,
+								1.0f, 0
+							};
+						}
+					}
+					return Graph.AddRasterPass(
+						std::move(DecalPass),
+						[
+							this,
+							DecalRenderer,
+							bNeedsDBuffer,
+							bUseDepthReconstruction,
+							bUnlitPass,
+							Width,
+							Height
+						]
+						{
+							if (!bCorePassSucceeded || !bNeedsDBuffer)
+								return;
+
+							if (bUseDepthReconstruction)
+							{
+								bCorePassSucceeded =
+									DecalRenderer->OnRenderDepth(
+										View,
+										Width,
+										Height,
+										VisibleDecals,
+										bUnlitPass);
+							}
+							else
+							{
+								bCorePassSucceeded =
+									DecalRenderer->OnRenderMesh(
+										ForwardBatches,
+										VisibleDecals,
+										bUnlitPass);
+							}
+						});
+				};
+
+			if (!AddDecalPass(DBufferLit, false))
+				return false;
+			if (!AddDecalPass(DBufferUnlit, true))
+				return false;
+		}
+
 		FRenderGraphRasterPassDesc Forward{};
 		Forward.Name = "ForwardOpaque";
+		Forward.ReadTextures = { DBufferLit, DBufferUnlit };
+		Forward.ReadTextureStartSlot = 14;
 		Forward.ColorAttachments = {
 			{ LightingHDR, ERenderGraphLoadAction::Load }
 		};
@@ -608,6 +737,8 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 				}
 			}
 			Renderer->DrawMeshes(ForwardBatches);
+
+			UnbindForwardDecal(Renderer);
 			UnbindForwardLighting(Renderer);
 		})) return false;
 	}
@@ -1092,4 +1223,48 @@ void FSceneRenderer::PrepareDrawData(FRenderer* Renderer, const FSceneRenderData
 				&Data.ObjectConstants[Index], sizeof(FPerObjectConstants));
 		Renderer->EndObjectConstants();
 	}
+}
+
+void FSceneRenderer::GatherProjectedDecals()
+{
+	VisibleDecals.Reset();
+
+	if (!World)
+		return;
+
+	for (TObjectIterator<UDecalComponent> It; It; ++It)
+	{
+		UDecalComponent* Component = *It;
+
+		if (!Component ||
+			!Component->IsRegistered() ||
+			!Component->IsShown(View.bGameView))
+		{
+			continue;
+		}
+
+		AActor* Owner = Component->GetOwner();
+
+		if (!Owner || Owner->GetWorld() != World)
+		{
+			continue;
+		}
+
+		FProjectedDecalRenderData Data{};
+
+		if (!Component->TryGetRenderData(Data))
+			continue;
+
+		VisibleDecals.Add(Data);
+	}
+
+	std::sort(
+		VisibleDecals.begin(),
+		VisibleDecals.end(),
+		[](const auto& A, const auto& B)
+		{
+			if (A.SortOrder != B.SortOrder)
+				return A.SortOrder < B.SortOrder;
+			return A.ComponentID < B.ComponentID;
+		});
 }

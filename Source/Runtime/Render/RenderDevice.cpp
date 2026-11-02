@@ -386,6 +386,17 @@ void FRenderDevice::CreateStates()
 		AlwaysDesc.DepthFunc = D3D11_COMPARISON_ALWAYS;
 		AlwaysDesc.StencilEnable = FALSE;
 		Device->CreateDepthStencilState(&AlwaysDesc, DepthStencilStates[(uint8)EDepthStencilState::AlwaysWrite].GetAddressOf());
+
+		// 데칼
+		// 깊이: 이미 보이는 표면과 같은 깊이만 통과
+		// 깊이 쓰기: 하지 않음
+		D3D11_DEPTH_STENCIL_DESC DecalDesc = {};
+		DecalDesc.DepthEnable = TRUE;
+		DecalDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+		DecalDesc.DepthFunc = D3D11_COMPARISON_EQUAL;
+		DecalDesc.StencilEnable = FALSE;
+
+		Device->CreateDepthStencilState(&DecalDesc, DepthStencilStates[(uint8)EDepthStencilState::DecalEqualReadOnly].GetAddressOf());
 	}
 
 	// ---------- Blend ----------
@@ -441,6 +452,26 @@ void FRenderDevice::CreateStates()
 			Desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
 			Device->CreateBlendState(&Desc, BlendStates[(uint8)EBlendState::ShadowMaskFadeR + Channel].GetAddressOf());
 		}
+
+		// 데칼: 알파 블렌드 + 프리멀티
+		// DBuffer RGB = 새 RGB + 기존 RGB * (1 - 새 Alpha)
+		// DBuffer A = 새 Alpha + 기존 Alpha * (1 - 새 Alpha)
+		D3D11_BLEND_DESC DecalBlendDesc = {};
+
+		auto& DecalRT = DecalBlendDesc.RenderTarget[0];
+
+		DecalRT.BlendEnable = TRUE;
+		DecalRT.SrcBlend = D3D11_BLEND_ONE;
+		DecalRT.DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+		DecalRT.BlendOp = D3D11_BLEND_OP_ADD;
+
+		DecalRT.SrcBlendAlpha = D3D11_BLEND_ONE;
+		DecalRT.DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+		DecalRT.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+
+		DecalRT.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+		Device->CreateBlendState(&DecalBlendDesc, BlendStates[(uint8)EBlendState::DecalPremultiplied].GetAddressOf());
 	}
 
 	// ---------- Sampler ----------

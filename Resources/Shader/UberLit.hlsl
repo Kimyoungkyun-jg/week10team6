@@ -46,6 +46,10 @@ StructuredBuffer<uint> TileSpotIndices : register(t12);
 // 언리얼 ScreenShadowMask: 그림자 광원마다 배정된 채널(R~A)에 Projection 결과가 들어 있다. 1 = 빛 받음.
 Texture2D<float4> ScreenShadowMask : register(t13);
 
+// 데칼
+Texture2D<float4> DBufferLit : register(t14);
+Texture2D<float4> DBufferUnlit : register(t15);
+
 cbuffer MaterialParams : register(b2)
 {
     float4 BaseColor;
@@ -442,6 +446,13 @@ FUberOutput Uber_PS(VS_OUT Input)
         SurfaceColor = Input.Color;
     }
     float3 Albedo = SurfaceColor.rgb * BaseColor.rgb;
+    
+    int3 PixelCoord = int3(int2(Input.Position.xy), 0);
+    
+    float4 LitDecal = DBufferLit.Load(PixelCoord);
+    
+    Albedo = Albedo * (1.0f - LitDecal.a) + LitDecal.rgb;
+    
     float3 Diffuse;
     float3 Specular = 0.0f;
 
@@ -460,9 +471,12 @@ FUberOutput Uber_PS(VS_OUT Input)
     // 조명·그림자를 계산하지 않고 표면 색을 그대로 낸다.
     Diffuse = 1.0f;
 #endif
+    float3 FinalColor = Albedo * Diffuse + Specular + Emissive.rgb;
+    float4 UnlitDecal = DBufferUnlit.Load(PixelCoord);
 
-    Output.LitColor = float4(Albedo * Diffuse + Specular + Emissive.rgb,
-        SurfaceColor.a * BaseColor.a);
+    FinalColor = FinalColor * (1.0f - UnlitDecal.a) + UnlitDecal.rgb;
+
+    Output.LitColor = float4(FinalColor, SurfaceColor.a * BaseColor.a);
     Output.NormalRoughness = float4(ShadingNormal, 0.8f);
 #endif
     return Output;

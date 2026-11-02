@@ -5,6 +5,7 @@
 #include "Math/Matrix.h"
 #include "Math/Vector.h"
 #include "Math/Box.h"
+#include "SkeletalMeshBake.h"
 #include <filesystem>
 
 using namespace fbxsdk;
@@ -476,6 +477,15 @@ bool FFbxImporter::ParseFbx(const FString& Path, FFbxInfo& Out)
 
 TUniquePtr<FSkeletalMeshData> FFbxImporter::LoadSkeletalMeshData(const FString& Path)
 {
+    const FString BinPath = Path + ".bin";
+
+    // 바이너리 반환
+    if (TUniquePtr<FSkeletalMeshData> Baked = FSkeletalMeshBake::ReadBaked(BinPath))
+    {
+        return Baked;
+    }
+
+    // 캐시가 없으면 FBX 파싱 및 Cook 수행
     FFbxInfo RawInfo;
     if (!ParseFbx(Path, RawInfo))
     {
@@ -487,6 +497,9 @@ TUniquePtr<FSkeletalMeshData> FFbxImporter::LoadSkeletalMeshData(const FString& 
     {
         return nullptr;
     }
+
+    // 가공한 쿡 데이터를 다음 실행을 위해 .bin 파일로 베이크
+    FSkeletalMeshBake::WriteBaked(BinPath, *MeshData);
 
     return MeshData;
 }

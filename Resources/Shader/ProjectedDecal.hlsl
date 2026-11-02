@@ -10,7 +10,7 @@ cbuffer PerObject : register(b0)
 }
 
 // b3는 Forward 타일 조명이 사용?
-cbuffer DecalConstants : register(b3)
+cbuffer DecalConstants : register(b4)
 {
     matrix WorldToDecal;
     float4 TintOpacity; // rgb: 색상, a: 불투명도

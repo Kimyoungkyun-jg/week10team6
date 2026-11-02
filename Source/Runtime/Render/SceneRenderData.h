@@ -7,6 +7,7 @@
 #include "Render/LightRenderData.h"
 #include "Render/SceneLightResources.h"
 #include "Render/SceneRendering.h"
+#include "Render/Decal/DecalStats.h"
 #include "Math/Matrix.h"
 #include <algorithm>
 #include <cmath>
@@ -70,6 +71,7 @@ struct FSceneRenderData
 
 	FRenderQueue RenderQueue;
 	FRenderStats RenderStats;
+	FDecalStats DecalStats;
 	TArray<FPrimitiveSceneProxy*> VisibleProxies;
 	TArray<FLODSelectionInput> LODInputs;
 	TArray<uint8> SelectedLODs;
@@ -138,6 +140,11 @@ struct FSceneRenderData
 	void ResetScene()
 	{
 		ResetFrame();
+
+		DecalStats.Frame = {};
+		DecalStats.bCollecting = false;
+		DecalStats.ResetHistory();
+
 		for (FGatherChunk& Chunk : GatherChunks)
 		{
 			Chunk.Groups.clear();

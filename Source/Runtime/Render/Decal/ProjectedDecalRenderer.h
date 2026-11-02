@@ -10,7 +10,7 @@
 class FRenderer;
 struct FMeshDrawBatch;
 struct FSceneView;
-
+struct FDecalFrameStats;
 class FProjectedDecalRenderer
 {
 public:
@@ -26,14 +26,16 @@ public:
 	bool OnRenderMesh(
 		std::span<const FMeshDrawBatch> ReceiverBatches,
 		std::span<const FProjectedDecalRenderData> Decals,
-		bool bUnlitPass);
+		bool bUnlitPass,
+		FDecalFrameStats* Stats = nullptr);
 
 	bool OnRenderDepth(
 		const FSceneView& View,
 		uint32 Width,
 		uint32 Height,
 		std::span<const FProjectedDecalRenderData> Decals,
-		bool bUnlitPass);
+		bool bUnlitPass,
+		FDecalFrameStats* Stats = nullptr);
 private:
 	// 비소유 포인터.
 	FRenderer* Renderer = nullptr;

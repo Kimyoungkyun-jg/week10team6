@@ -269,6 +269,9 @@ bool FRenderGraphBuilder::Execute() // 등록되어 있던
 		}
 
 		UnbindConflictingViews(Context, Outputs);
+
+		if (Pass.Desc.OnBeforeExecute)
+			Pass.Desc.OnBeforeExecute();
 		
 		for (uint32 Index = 0; Index < Pass.Desc.ColorAttachments.size(); ++Index)
 		{
@@ -311,6 +314,9 @@ bool FRenderGraphBuilder::Execute() // 등록되어 있던
 		RenderCommand::SetViewport(Viewport.X, Viewport.Y, Viewport.Width, Viewport.Height);
 		Pass.Execute();
 		RenderCommand::EndRenderPass();
+
+		if (Pass.Desc.OnAfterExecute)
+			Pass.Desc.OnAfterExecute();
 	}
 	return true;
 }

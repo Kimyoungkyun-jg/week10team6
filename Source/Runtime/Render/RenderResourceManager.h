@@ -55,7 +55,9 @@ public:
 	static FShaderProgram* GetShaderProgram(const FString& InPath);
 
 	static FPipelineState* GetPSO(const EPSOType& InType);
-	static FShaderProgram* GetForwardShaderProgram(ELightingModel Model);
+	static FShaderProgram* GetForwardShaderProgram(ELightingModel Model, bool bGPUSkinning = false);
+	static FShaderProgram* GetWorldNormalShaderProgram(bool bGPUSkinning);
+	static FShaderProgram* GetTranslucentShaderProgram(bool bGPUSkinning);
 	static FShaderProgram* GetShadowDepthShaderProgram();
 private:
 	

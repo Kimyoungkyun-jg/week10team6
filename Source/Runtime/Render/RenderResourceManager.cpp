@@ -102,6 +102,33 @@ void FRenderResourceManager::InitPipelineStates()
 		ShaderProgramMap[Key] = MakeUnique<FShaderProgram>(VSRaw, PSRaw);
 		if (std::strcmp(Name, "VIEW_MODE_WORLD_NORMAL") == 0)
 			PipelineStateMap[EPSOType::StaticMesh_WorldNormal]->Shader = ShaderProgramMap[Key].get();
+
+		const D3D_SHADER_MACRO SkinningDefines[] = { { Name, "1" }, { "GPU_SKINNING", "1" }, { nullptr, nullptr } };
+		FString SkinningVSPath;
+		FShaderByteCode SkinningCode = RenderUtil::GetOrCompile(Path, "mainVS", EShaderType::Vertex, SkinningVSPath, SkinningDefines);
+		if (!SkinningCode.IsValid()) continue;
+		auto SkinningVS = RenderCommand::CreateVertexShader(SkinningCode);
+		if (!SkinningVS || !SkinningVS->IsValid()) continue;
+		FVertexShader* SkinningVSRaw = SkinningVS.get();
+		VertexShaderMap[SkinningVSPath] = std::move(SkinningVS);
+		ShaderProgramMap[Key + "#GPU"] = MakeUnique<FShaderProgram>(SkinningVSRaw, PSRaw);
+	}
+	const FString TranslucentPath = "Resources/Shader/StaticMeshTranslucentShader.hlsl";
+	if (auto* Base = ShaderProgramMap.Find(TranslucentPath))
+	{
+		const D3D_SHADER_MACRO Defines[] = { { "GPU_SKINNING", "1" }, { nullptr, nullptr } };
+		FString VSPath;
+		FShaderByteCode Code = RenderUtil::GetOrCompile(TranslucentPath, "mainVS", EShaderType::Vertex, VSPath, Defines);
+		if (Code.IsValid())
+		{
+			auto VS = RenderCommand::CreateVertexShader(Code);
+			if (VS && VS->IsValid())
+			{
+				FVertexShader* VSRaw = VS.get();
+				VertexShaderMap[VSPath] = std::move(VS);
+				ShaderProgramMap[TranslucentPath + "#GPU"] = MakeUnique<FShaderProgram>(VSRaw, (*Base)->PixelShader);
+			}
+		}
 	}
 }
 
@@ -111,7 +138,7 @@ FShaderProgram* FRenderResourceManager::GetShadowDepthShaderProgram()
 	return nullptr;
 }
 
-FShaderProgram* FRenderResourceManager::GetForwardShaderProgram(ELightingModel Model)
+FShaderProgram* FRenderResourceManager::GetForwardShaderProgram(ELightingModel Model, bool bGPUSkinning)
 {
 	const char* Name = "LIGHTING_MODEL_LAMBERT";
 	switch (Model)
@@ -121,7 +148,21 @@ FShaderProgram* FRenderResourceManager::GetForwardShaderProgram(ELightingModel M
 	case ELightingModel::Unlit: Name = "LIGHTING_MODEL_UNLIT"; break;
 	default: break;
 	}
-	const FString Key = FString("Resources/Shader/UberLit.hlsl#") + Name;
+	const FString Key = FString("Resources/Shader/UberLit.hlsl#") + Name + (bGPUSkinning ? "#GPU" : "");
+	if (auto* Found = Get().ShaderProgramMap.Find(Key)) return Found->get();
+	return nullptr;
+}
+
+FShaderProgram* FRenderResourceManager::GetWorldNormalShaderProgram(bool bGPUSkinning)
+{
+	const FString Key = FString("Resources/Shader/UberLit.hlsl#VIEW_MODE_WORLD_NORMAL") + (bGPUSkinning ? "#GPU" : "");
+	if (auto* Found = Get().ShaderProgramMap.Find(Key)) return Found->get();
+	return nullptr;
+}
+
+FShaderProgram* FRenderResourceManager::GetTranslucentShaderProgram(bool bGPUSkinning)
+{
+	const FString Key = FString("Resources/Shader/StaticMeshTranslucentShader.hlsl") + (bGPUSkinning ? "#GPU" : "");
 	if (auto* Found = Get().ShaderProgramMap.Find(Key)) return Found->get();
 	return nullptr;
 }

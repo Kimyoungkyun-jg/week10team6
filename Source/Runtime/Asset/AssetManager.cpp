@@ -126,30 +126,16 @@ namespace
 
 		uint32 VertexCount = static_cast<uint32>(MeshData->SkinnedVertices.Num());
 
-		// 1. 초기 T-Pose 정점 버퍼 데이터 조립
-		TArray<FVertex> InitialVertices;
-		InitialVertices.SetNum(VertexCount);
-		for (uint32 i = 0; i < VertexCount; ++i)
-		{
-			const FSkeletalVertex& Src = MeshData->SkinnedVertices[i];
-			FVertex& Dst = InitialVertices[i];
-			Dst.Position = Src.Position;
-			Dst.Normal = Src.Normal;
-			Dst.Tangent = Src.Tangent;
-			Dst.UV = Src.UV;
-			Dst.Color = Src.Color;
-		}
-
+		// 1. 초기 T-Pose 정점 버퍼 데이터 조립: 원본 정점과 본 데이터를 공유 정적 버퍼에 올린다.
 		// 2. 엔진 표준 RenderCommand로 버퍼 생성 (버텍스는 CPU 스키닝용 Dynamic, 인덱스는 Static)
-		TUniquePtr<FVertexBuffer> VB = RenderCommand::CreateDynamicVertexBuffer(
-			sizeof(FVertex) * VertexCount, sizeof(FVertex));
+		// CPU 스키닝용 Dynamic 버퍼는 컴포넌트별로 만들고, 여기서는 Static 원본 버퍼를 만든다.
+		TUniquePtr<FVertexBuffer> VB = RenderCommand::CreateStaticVertexBuffer(
+			MeshData->SkinnedVertices.GetData(), sizeof(FSkeletalVertex) * VertexCount, sizeof(FSkeletalVertex));
 		TUniquePtr<FIndexBuffer> IB = RenderCommand::CreateStaticIndexBuffer(
 			MeshData->Indices.GetData(), static_cast<uint32>(MeshData->Indices.Num()));
 
 		if (!VB || !IB) return nullptr;
-
-		// 초기 T-Pose 데이터 업로드
-		RenderCommand::UpdateBufferData(VB.get(), InitialVertices.GetData(), sizeof(FVertex) * VertexCount);
+		// 초기 T-Pose 데이터 업로드: CreateStaticVertexBuffer의 초기 데이터로 전달한다.
 
 		// 3. USkeletalMesh 객체 생성
 		USkeletalMesh* Mesh = NewObject<USkeletalMesh>();

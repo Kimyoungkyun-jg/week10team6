@@ -19,9 +19,9 @@ void USkeletalMeshComponent::TickComponent(float DeltaTime)
 {
 	Super::TickComponent(DeltaTime);
 
-	if (bSkinningMatricesDirty)
+	if (!SkinningMatrices.IsEmpty() && (bSkinningMatricesDirty || AppliedMode != SkinningMode))
 	{
-		PerformCPUSkinning();
+		UpdateSkinning();
 	}
 }
 
@@ -34,12 +34,14 @@ void USkeletalMeshComponent::SetSkeletalMesh(USkeletalMesh* InSkeletalMesh)
 void USkeletalMeshComponent::InitBoneTransforms()
 {
 	SkinnedVertexBuffer.reset();
+	SkinningMatricesBuffer.reset();
 	LocalBoneTransforms.Reset();
 	GlobalBoneTransforms.Reset();
 	SkinningMatrices.Reset();
 	SkinnedVertices.Reset();
 	bSkinningMatricesDirty = false;
 	bGlobalBoneTransformsOverridden = false;
+	AppliedMode = ESkinningMode::CPU;
 	if (!SkeletalMesh) return;
 
 	const TArray<FBoneInfo>& Bones = SkeletalMesh->MeshData.Bones;
@@ -49,10 +51,25 @@ void USkeletalMeshComponent::InitBoneTransforms()
 	GlobalBoneTransforms.SetNum(BoneCount);
 	SkinningMatrices.SetNum(BoneCount);
 	SkinnedBounds = SkeletalMesh->MeshData.AABB;
-	if (BoneCount == 0) return;
-	SkinnedVertexBuffer = RenderCommand::CreateDynamicVertexBuffer(
-		static_cast<uint32>(SkeletalMesh->MeshData.SkinnedVertices.Num() * sizeof(FVertex)), sizeof(FVertex));
-
+	if (BoneCount == 0)
+	{
+		const TArray<FSkeletalVertex>& Vertices = SkeletalMesh->MeshData.SkinnedVertices;
+		SkinnedVertices.SetNum(Vertices.Num());
+		for (int32 Index = 0; Index < Vertices.Num(); ++Index)
+		{
+			SkinnedVertices[Index].Position = Vertices[Index].Position;
+			SkinnedVertices[Index].Normal = Vertices[Index].Normal;
+			SkinnedVertices[Index].Tangent = Vertices[Index].Tangent;
+			SkinnedVertices[Index].UV = Vertices[Index].UV;
+			SkinnedVertices[Index].Color = Vertices[Index].Color;
+		}
+		SkinnedVertexBuffer = RenderCommand::CreateDynamicVertexBuffer(
+			static_cast<uint32>(Vertices.Num() * sizeof(FVertex)), sizeof(FVertex));
+		if (SkinnedVertexBuffer)
+			RenderCommand::UpdateBufferData(SkinnedVertexBuffer.get(), SkinnedVertices.GetData(),
+				static_cast<uint32>(Vertices.Num() * sizeof(FVertex)));
+		return;
+	}
 	for (int32 i = 0; i < BoneCount; ++i)
 	{
 		LocalBoneTransforms[i] = Bones[i].LocalBindPose;
@@ -61,7 +78,7 @@ void USkeletalMeshComponent::InitBoneTransforms()
 	}
 
 	bSkinningMatricesDirty = true;
-	PerformCPUSkinning();
+	UpdateSkinning();
 }
 
 void USkeletalMeshComponent::SetBoneTransform(int32 BoneIndex, const FMatrix& LocalTransform)
@@ -94,11 +111,10 @@ void USkeletalMeshComponent::SetGlobalBoneTransforms(const TArray<FMatrix>& InGl
 	bSkinningMatricesDirty = true;
 }
 
-void USkeletalMeshComponent::PerformCPUSkinning()
+void USkeletalMeshComponent::UpdateBoneMatrices()
 {
 	if (!SkeletalMesh) return;
-	const FSkeletalMeshData& MeshData = SkeletalMesh->MeshData;
-	const auto& Bones = MeshData.Bones;
+	const auto& Bones = SkeletalMesh->MeshData.Bones;
 	int32 BoneCount = Bones.Num();
 	if (BoneCount == 0) return;
 
@@ -121,6 +137,45 @@ void USkeletalMeshComponent::PerformCPUSkinning()
 		// 스키닝 매트릭스 계산
 		SkinningMatrices[i] = Bones[i].InverseBindPose * GlobalBoneTransforms[i];
 	}
+	bSkinningMatricesDirty = false;
+}
+
+void USkeletalMeshComponent::UpdateSkinning()
+{
+	if (!SkeletalMesh || SkinningMatrices.IsEmpty()) return;
+	if (bSkinningMatricesDirty) UpdateBoneMatrices();
+	if (SkinningMode == ESkinningMode::GPU)
+	{
+		if (!SkinningMatricesBuffer)
+			SkinningMatricesBuffer = RenderCommand::CreateDynamicStructuredBuffer(
+				static_cast<uint32>(SkinningMatrices.Num()), sizeof(FMatrix));
+		if (SkinningMatricesBuffer && SkinningMatricesBuffer->GetBuffer() && SkinningMatricesBuffer->GetSRV())
+		{
+			RenderCommand::UpdateBufferData(SkinningMatricesBuffer.get(), SkinningMatrices.GetData(),
+				static_cast<uint32>(SkinningMatrices.Num() * sizeof(FMatrix)));
+			if (AppliedMode != ESkinningMode::GPU)
+			{
+				SkinnedBounds = SkeletalMesh->MeshData.AABB;
+				MarkTransformDirty();
+			}
+			AppliedMode = ESkinningMode::GPU;
+			return;
+		}
+	}
+	PerformCPUSkinning();
+	AppliedMode = ESkinningMode::CPU;
+}
+
+void USkeletalMeshComponent::PerformCPUSkinning()
+{
+	if (!SkeletalMesh) return;
+	const FSkeletalMeshData& MeshData = SkeletalMesh->MeshData;
+	const int32 BoneCount = MeshData.Bones.Num();
+	if (BoneCount == 0) return;
+	if (bSkinningMatricesDirty) UpdateBoneMatrices();
+	if (!SkinnedVertexBuffer)
+		SkinnedVertexBuffer = RenderCommand::CreateDynamicVertexBuffer(
+			static_cast<uint32>(MeshData.SkinnedVertices.Num() * sizeof(FVertex)), sizeof(FVertex));
 
 	int32 VertexCount = static_cast<int32>(MeshData.SkinnedVertices.Num());
 	SkinnedVertices.SetNum(VertexCount);
@@ -185,17 +240,21 @@ void USkeletalMeshComponent::PerformCPUSkinning()
 		);
 	}
 
-	bSkinningMatricesDirty = false;
+	AppliedMode = ESkinningMode::CPU;
 }
 
 FBox USkeletalMeshComponent::CalcLocalBounds() const
 {
+	if (SkeletalMesh && !SkinningMatrices.IsEmpty() && (bSkinningMatricesDirty || AppliedMode != SkinningMode))
+		const_cast<USkeletalMeshComponent*>(this)->UpdateSkinning();
 	return SkeletalMesh ? SkinnedBounds : Super::CalcLocalBounds();
 }
 
 void USkeletalMeshComponent::SubmitToRenderQueue(FRenderQueue& RenderQueue, const FViewContext& ViewContext)
 {
 	if (!SkeletalMesh) return;
+	if (!SkinningMatrices.IsEmpty() && (bSkinningMatricesDirty || AppliedMode != SkinningMode)) UpdateSkinning();
+	if (!SkinnedVertexBuffer && AppliedMode == ESkinningMode::CPU) return;
 	const FSkeletalMeshData& MeshData = SkeletalMesh->MeshData;
 
 	for (const FSkeletalMeshSection& Section : MeshData.Sections)
@@ -205,7 +264,8 @@ void USkeletalMeshComponent::SubmitToRenderQueue(FRenderQueue& RenderQueue, cons
 
 		FRenderPacket Packet;
 		Packet.SkeletalMesh = SkeletalMesh;
-		Packet.SkeletalVertexBuffer = SkinnedVertexBuffer.get();
+		Packet.SkeletalVertexBuffer = AppliedMode == ESkinningMode::CPU ? SkinnedVertexBuffer.get() : nullptr;
+		Packet.SkinningMatricesBuffer = AppliedMode == ESkinningMode::GPU ? SkinningMatricesBuffer.get() : nullptr;
 		Packet.Model = RenderQueue.StoreWorldMatrix(GetWorldMatrix());
 		Packet.StartIndex = Section.StartIndex;
 		Packet.IndexCount = Section.IndexCount;

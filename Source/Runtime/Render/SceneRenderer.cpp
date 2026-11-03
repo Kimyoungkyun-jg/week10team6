@@ -610,14 +610,14 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					if (ForwardBatches.IsEmpty()) return;
 
 					// 실제 메시 패스와 같은 VS를 사용해 깊이 계산을 일치시킨다.
-					FShaderProgram DepthProgram(ForwardBatches.Front().Pipeline.Shader->VertexShader, DepthPipeline->Shader->PixelShader);
 					TArray<FMeshDrawBatch> DepthBatches = ForwardBatches;
 					for (FMeshDrawBatch& Batch : DepthBatches)
 					{
+						FShaderProgram DepthProgram(Batch.Pipeline.Shader->VertexShader, DepthPipeline->Shader->PixelShader);
 						Batch.Pipeline = *DepthPipeline;
 						Batch.Pipeline.Shader = &DepthProgram;
+						Renderer->DrawMeshes(std::span<const FMeshDrawBatch>(&Batch, 1));
 					}
-					Renderer->DrawMeshes(DepthBatches);
 				})) return false;
 		}
 

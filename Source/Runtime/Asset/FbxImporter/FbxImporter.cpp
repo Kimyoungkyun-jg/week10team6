@@ -572,7 +572,7 @@ bool FFbxImporter::LoadAnimationClips(const FString& Path, TArray<FAnimationClip
         fbxsdk::FbxSystemUnit::m.ConvertScene(Scene);
     const fbxsdk::FbxAxisSystem EngineAxisSystem(
         fbxsdk::FbxAxisSystem::eZAxis,
-        fbxsdk::FbxAxisSystem::eParityEven,
+        fbxsdk::FbxAxisSystem::eParityEven, 
         fbxsdk::FbxAxisSystem::eLeftHanded);
     if (Scene->GetGlobalSettings().GetAxisSystem() != EngineAxisSystem)
         EngineAxisSystem.ConvertScene(Scene);

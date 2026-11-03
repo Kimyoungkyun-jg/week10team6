@@ -15,6 +15,12 @@ enum class ERenderingPath
     Deferred
 };
 
+enum class ESkinningMode : uint8_t
+{
+	CPU,
+	GPU
+};
+
 enum class ELightingModel
 {
     Gouraud,

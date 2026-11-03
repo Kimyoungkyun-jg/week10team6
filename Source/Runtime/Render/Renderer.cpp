@@ -46,6 +46,7 @@ void FRenderer::BindBatch(const FMeshDrawBatch& Batch)
 	
 	RenderCommand::BindVertexBuffer(Batch.VertexBuffer);
 	RenderCommand::BindIndexBuffer(Batch.IndexBuffer);
+	RenderCommand::BindShaderResource(16, Batch.SkinningMatricesBuffer, EShaderBindFlagBits::Vertex);
 	
 	if (Batch.bBindViewConstants)
 		RenderCommand::BindConstantBuffer(0, ViewCB.get(), EShaderBindFlagBits::Vertex);

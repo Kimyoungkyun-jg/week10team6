@@ -1,4 +1,5 @@
 #pragma pack_matrix(row_major)
+#include "Skinning.hlsli"
 cbuffer Viewconstants : register(b0)
 {
     matrix VP;
@@ -32,6 +33,10 @@ struct VS_INPUT
 	float4 tangent : TANGENT;
 	float2 t : TEXCOORD;
 	float4 c : COLOR;
+#if GPU_SKINNING
+	int4 BoneIndices : BLENDINDICES;
+	float4 BoneWeights : BLENDWEIGHT;
+#endif
 };
 
 struct PS_INPUT
@@ -82,6 +87,9 @@ float FogTransmittance(float3 Position)
 
 PS_INPUT mainVS(VS_INPUT input)
 {
+#if GPU_SKINNING
+    SkinVertex(input.p, input.n, input.tangent, input.BoneIndices, input.BoneWeights);
+#endif
     PS_INPUT output;
 
     float4 WorldPosition = mul(float4(input.p, 1.0f), World);

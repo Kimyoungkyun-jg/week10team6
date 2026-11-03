@@ -31,6 +31,7 @@
 #include "Components/RectLightComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 
 #include "Asset/AssetManager.h"
 #include "Render/RenderResourceManager.h"
@@ -914,6 +915,8 @@ void UEditorEngine::BuildSceneRenderOptions(FGameViewportClient* ViewClient, FSc
 	{
 		return;
 	}
+	USkeletalMeshComponent::SetSkinningMode(SettingsPanel->GetSettings().RenderingPath == ERenderingPath::Forward
+		? SettingsPanel->GetSettings().SkinningMode : ESkinningMode::CPU);
 
 	Options.bEnableFXAA = SettingsPanel->GetSettings().bEnableFXAA;
 	Options.bCacheShadows = SettingsPanel->GetSettings().bCacheShadows;
@@ -940,6 +943,8 @@ void UEditorEngine::BuildSceneRenderOptions(FEditorViewportClient* ViewClient, b
 	{
 		return;
 	}
+	USkeletalMeshComponent::SetSkinningMode(SettingsPanel->GetSettings().RenderingPath == ERenderingPath::Forward
+		? SettingsPanel->GetSettings().SkinningMode : ESkinningMode::CPU);
 
 	Options.bEnableFXAA = SettingsPanel->GetSettings().bEnableFXAA;
 	Options.bCacheShadows = SettingsPanel->GetSettings().bCacheShadows;

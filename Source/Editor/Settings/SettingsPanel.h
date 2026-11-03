@@ -28,6 +28,7 @@ struct FEditorSettings
 	bool bEnableFXAA = false;
 	ELightCullingMode LightCullingMode = ELightCullingMode::Tiled;
 	ERenderingPath RenderingPath = ERenderingPath::Deferred;
+	ESkinningMode SkinningMode = ESkinningMode::CPU;
 	ELightingModel LightingModel = ELightingModel::Gouraud;
 	EDecalRenderMethod DecalRenderMethod = EDecalRenderMethod::MeshRerendering;
 

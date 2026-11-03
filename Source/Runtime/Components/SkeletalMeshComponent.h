@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Components/SkinnedMeshComponent.h"
+#include "Render/RenderEnums.h"
 #include "SkeletalMeshComponent.generated.h"
 
 UCLASS()
@@ -23,6 +24,9 @@ public:
 	const TArray<FMatrix>& GetBoneTransforms() const { return LocalBoneTransforms; }
 
 	void PerformCPUSkinning();
+	void UpdateSkinning();
+	static void SetSkinningMode(ESkinningMode Mode) { SkinningMode = Mode; }
+	static ESkinningMode GetSkinningMode() { return SkinningMode; }
 	const TArray<FMatrix>& GetGlobalBoneTransforms() const { return GlobalBoneTransforms; }
 	virtual FBox CalcLocalBounds() const override;
 
@@ -31,11 +35,15 @@ public:
 	virtual bool LineTraceComponent(const FRay& WorldRay, FHitResult& OutHit) override;
 	virtual bool LineTraceComponentLocal(const FRay& LocalRay, float& OutT) override;
 private:
+	void UpdateBoneMatrices();
+	inline static ESkinningMode SkinningMode = ESkinningMode::CPU;
+	ESkinningMode AppliedMode = ESkinningMode::CPU;
 	TArray<FMatrix> LocalBoneTransforms;
 	TArray<FMatrix> GlobalBoneTransforms;
 	TArray<FMatrix> SkinningMatrices;
 	TArray<FVertex> SkinnedVertices;
 	TUniquePtr<FVertexBuffer> SkinnedVertexBuffer;
+	TUniquePtr<FStructuredBuffer> SkinningMatricesBuffer;
 	FBox SkinnedBounds;
 	bool bSkinningMatricesDirty = true;
 	bool bGlobalBoneTransformsOverridden = false;

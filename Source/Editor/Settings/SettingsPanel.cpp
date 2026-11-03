@@ -11,6 +11,7 @@
 #include "GameFramework/GameMode.h"
 #include "GameFramework/GameHUD.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "UObject/UObjectIterator.h"
 #include "UObject/UObjectHash.h"
 
@@ -25,6 +26,8 @@ FSettingsPanel::~FSettingsPanel()
 bool FSettingsPanel::Init()
 {
 	LoadSettings();
+	USkeletalMeshComponent::SetSkinningMode(Settings.RenderingPath == ERenderingPath::Forward
+		? Settings.SkinningMode : ESkinningMode::CPU);
 	return true;
 }
 
@@ -55,6 +58,15 @@ void FSettingsPanel::OnRender()
 	ImGui::SetNextItemWidth(200.0f);
 	if (ImGui::Combo("Rendering Path", &RenderingPathIndex, RenderingPaths, IM_ARRAYSIZE(RenderingPaths)))
 		Settings.RenderingPath = static_cast<ERenderingPath>(RenderingPathIndex);
+	const char* SkinningModes[] = { "CPU", "GPU" };
+	int SkinningModeIndex = static_cast<int>(Settings.SkinningMode);
+	ImGui::SetNextItemWidth(200.0f);
+	if (ImGui::Combo("Skinning Mode", &SkinningModeIndex, SkinningModes, IM_ARRAYSIZE(SkinningModes)))
+		Settings.SkinningMode = static_cast<ESkinningMode>(SkinningModeIndex);
+	USkeletalMeshComponent::SetSkinningMode(Settings.RenderingPath == ERenderingPath::Forward
+		? Settings.SkinningMode : ESkinningMode::CPU);
+	if (Settings.RenderingPath != ERenderingPath::Forward && Settings.SkinningMode == ESkinningMode::GPU)
+		ImGui::TextDisabled("GPU skinning applies to Forward rendering only.");
 
 	const char* LightingModels[] = { "Gouraud", "Lambert", "Phong", "Unlit" };
 	int LightingModelIndex = static_cast<int>(Settings.LightingModel);
@@ -257,6 +269,7 @@ bool FSettingsPanel::SaveSettings() const
 
 	File << "LightCullingMode=" << (Settings.LightCullingMode == ELightCullingMode::Off ? "Off" : Settings.LightCullingMode == ELightCullingMode::Tiled ? "Tiled" : "Clustered") << "\n";
 	File << "RenderingPath=" << (Settings.RenderingPath == ERenderingPath::Forward ? "Forward" : "Deferred") << "\n";
+	File << "SkinningMode=" << (Settings.SkinningMode == ESkinningMode::GPU ? "GPU" : "CPU") << "\n";
 	File << "LightingModel=" << (Settings.LightingModel == ELightingModel::Gouraud ? "Gouraud" :
 		Settings.LightingModel == ELightingModel::Lambert ? "Lambert" :
 		Settings.LightingModel == ELightingModel::Unlit ? "Unlit" : "Phong") << "\n";
@@ -420,6 +433,11 @@ bool FSettingsPanel::LoadSettings()
 				{
 					if (ValueStr == "Forward") Settings.RenderingPath = ERenderingPath::Forward;
 					else if (ValueStr == "Deferred") Settings.RenderingPath = ERenderingPath::Deferred;
+				}
+				else if (Key == "SkinningMode")
+				{
+					if (ValueStr == "GPU") Settings.SkinningMode = ESkinningMode::GPU;
+					else if (ValueStr == "CPU") Settings.SkinningMode = ESkinningMode::CPU;
 				}
 				else if (Key == "LightingModel")
 				{

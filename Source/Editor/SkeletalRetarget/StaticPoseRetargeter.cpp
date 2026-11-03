@@ -104,7 +104,7 @@ static bool ApplyRigPose(const USkeletalMesh& SourceRig, const TArray<FMatrix>* 
 	}
 
 	TargetMesh.SetGlobalBoneTransforms(Global);
-	TargetMesh.PerformCPUSkinning();
+	TargetMesh.UpdateSkinning();
 	OutError.clear();
 	return true;
 }

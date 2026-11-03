@@ -254,7 +254,7 @@ void FPoseRetargetPanel::ApplyAnimationFrame()
 		std::clamp(static_cast<int32>(AnimationTime * Clip.FramesPerSecond), 0, Clip.Frames.Num() - 1);
 	if (FrameIndex == LastAnimationFrame) return;
 	Components[0]->SetGlobalBoneTransforms(Clip.Frames[FrameIndex].Bones);
-	Components[0]->PerformCPUSkinning();
+	Components[0]->UpdateSkinning();
 	if (bResultPoseApplied && Components[2] && TargetMesh)
 	{
 		FString Error;
@@ -700,3 +700,4 @@ void FPoseRetargetPanel::DrawBones(int32 Index, FLineBatcher& Lines, const FMatr
 	}
 	Lines.OnRender(ViewProjection);
 }
+TArray<FMatrix> RootCorrections;

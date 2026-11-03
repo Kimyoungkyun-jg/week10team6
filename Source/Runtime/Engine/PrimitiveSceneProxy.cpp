@@ -4,6 +4,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Render/Mesh.h"
 #include "Engine/Scene.h"
+#include "Render/SceneRenderer.h"
 
 FPrimitiveSceneProxy::FPrimitiveSceneProxy(UPrimitiveComponent* InComponent)
     : Component(InComponent)

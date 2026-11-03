@@ -565,6 +565,12 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			}
 		}
 		GatherProjectedDecals();
+		MeshDecalDrawLists.Reset();
+
+		if (Options.DecalRenderMethod == EDecalRenderMethod::MeshRerendering)
+		{
+			BuildProjectedDecalMeshDrawLists();
+		}
 		FProjectedDecalRenderer* DecalRenderer = Renderer->GetProjectedDecal();
 
 		// 그래프 실행 중 설정이 바뀌어도 이번 뷰는 같은 값을 사용한다.
@@ -860,6 +866,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 									DecalRenderer->OnRenderMesh(
 										DecalReceiverBatches,
 										VisibleDecals,
+										MeshDecalDrawLists,
 										bUnlitPass,
 										Counters);
 							}
@@ -1415,9 +1422,7 @@ void FSceneRenderer::GatherProjectedDecals()
 		{
 			UDecalComponent* Component = *It;
 
-			if (!Component ||
-				!Component->IsRegistered() ||
-				!Component->IsShown(View.bGameView))
+			if (!Component || !Component->IsRegistered())
 			{
 				continue;
 			}
@@ -1450,8 +1455,29 @@ void FSceneRenderer::GatherProjectedDecals()
 				continue;
 			}
 
+			const FBox Bounds = DecalBounds::GetWorldBox(Data);
+
+			if (!DecalBounds::IsFinite(Bounds))
+			{
+				if (Stats.bCollecting)
+					++Frame.RenderDataRejected;
+
+				continue;
+			}
+
 			if (Stats.bCollecting)
 				++Frame.EligibleCount;
+
+			uint32 PlaneMask = FrustumAllPlanesMask;
+
+			if (ClassifyBoxInFrustum(Bounds, View.Frustum, PlaneMask) ==
+				EFrustumTest::Outside)
+			{
+				if (Stats.bCollecting)
+					++Frame.ViewFrustumRejectedDecals;
+
+				continue;
+			}
 
 			VisibleDecals.Add(Data);
 		}
@@ -1471,5 +1497,160 @@ void FSceneRenderer::GatherProjectedDecals()
 					return A.SortOrder < B.SortOrder;
 				return A.ComponentID < B.ComponentID;
 			});
+	}
+}
+
+void FSceneRenderer::BuildProjectedDecalMeshDrawLists()
+{
+	MeshDecalDrawLists.Reset();
+	MeshDecalDrawLists.SetNum(VisibleDecals.Num());
+
+	if (!World ||
+		VisibleDecals.IsEmpty() ||
+		DecalReceiverBatches.IsEmpty())
+	{
+		return;
+	}
+
+	FDecalStats& Stats = RenderData.DecalStats;
+	FDecalFrameStats& Frame = Stats.Frame;
+
+	FDecalCpuScope Timer(
+		Stats.bCollecting,
+		Frame.ReceiverSelectionCycles);
+
+	FScene& Scene = World->GetScene();
+
+	using FItemRefs = TArray<FDecalReceiverItemRef>;
+
+	TMap<const FPrimitiveSceneProxy*, FItemRefs> ReceiverLookup;
+
+	FItemRefs FallbackItems;
+
+	// BVH 갱신 대기가 남아있으면 오래된 Bounds로 메시가 누락되지 않도록 보수적으로 처리
+	const bool bBVHReady =
+		!Scene.bElementListChanged &&
+		Scene.DirtyProxies.IsEmpty() &&
+		Scene.RenderStateDirtyProxies.IsEmpty();
+
+	auto IsIndexedProxy =
+		[&](const FPrimitiveSceneProxy* Proxy)
+		{
+			if (!bBVHReady ||
+				!Proxy ||
+				Proxy->GetScene() != &Scene ||
+				!Proxy->GetComponent())
+			{
+				return false;
+			}
+
+			const int32 Index = Proxy->PackedIndex;
+
+			return
+				Index >= 0 &&
+				Index < Scene.PrimitiveSceneProxies.Num() &&
+				Scene.PrimitiveSceneProxies[Index] == Proxy;
+		};
+
+	// 뷰당 한 번: Proxy -> 현재 뷰의 수신 Item 목록
+	for (uint32 BatchIndex = 0; BatchIndex < DecalReceiverBatches.Num(); ++BatchIndex)
+	{
+		const FMeshDrawBatch& Batch = DecalReceiverBatches[BatchIndex];
+
+		for (uint32 ItemIndex = 0; ItemIndex < Batch.Items.Num(); ++ItemIndex)
+		{
+			const FMeshDrawBatch::FItem& Item = Batch.Items[ItemIndex];
+
+			if (!Item.bReceiveDecal)
+				continue;
+
+			const FDecalReceiverItemRef Ref{
+				BatchIndex, ItemIndex
+			};
+
+			if (IsIndexedProxy(Item.Proxy))
+			{
+				ReceiverLookup[Item.Proxy].Add(Ref);
+			}
+			else
+			{
+				FallbackItems.Add(Ref);
+			}
+		}
+	}
+
+	for (uint32 DecalIndex = 0; DecalIndex < VisibleDecals.Num(); ++DecalIndex)
+	{
+		const FProjectedDecalRenderData& Decal = VisibleDecals[DecalIndex];
+
+		FItemRefs& Selected = MeshDecalDrawLists[DecalIndex].Items;
+
+		const FBox DecalWorldBox = DecalBounds::GetWorldBox(Decal);
+
+		const FBox QueryBox = DecalBounds::GetWorldBox(Decal);
+
+		const FMatrix WorldToDecal = Decal.DecalToWorld.Inverse();
+
+		if (bBVHReady && !ReceiverLookup.IsEmpty())
+		{
+			Scene.BVH.Query(
+				[&](const FBox& Bounds)
+				{
+					if (Stats.bCollecting)
+						++Frame.MeshBVHBoundsTests;
+
+					return DecalBounds::Overlaps(
+						QueryBox, Bounds);
+				},
+				[&](FPrimitiveSceneProxy* Proxy)
+				{
+					if (Stats.bCollecting)
+						++Frame.MeshBVHProxyCandidates;
+
+					const FItemRefs* Found = ReceiverLookup.Find(Proxy);
+
+					// 월드에는 있지만 이번 뷰에서 실제로 그릴 수신 Item이 없는 경우
+					if (!Found || Found->IsEmpty())
+						return;
+
+					const FBox ReceiverWorldBox = DecalBounds::GetProxyWorldBox(*Proxy);
+
+					if (!DecalBounds::MayIntersectVolume(
+						ReceiverWorldBox, WorldToDecal))
+					{
+						if (Stats.bCollecting)
+							++Frame.MeshRefineRejectedProxies;
+
+						return;
+					}
+
+					Selected.Append(*Found);
+				}
+			);
+		}
+
+		// Bounds를 확실히 알 수 없는 Item은 일단 포함한다.
+		// 이 목록이 커지면 후속으로 명시적 Bounds를 추가한다.
+		Selected.Append(FallbackItems);
+
+		if (Stats.bCollecting)
+		{
+			Frame.MeshFallbackItems += FallbackItems.Num();
+		}
+
+		// BVH 방문 순서 대신 기존 Batch/Item 순서로 제출.
+		std::sort(Selected.begin(), Selected.end());
+
+		// 중복 제거. 같은 Batch/Item이 여러 번 선택될 수 있다.
+		auto NewEnd = std::unique(Selected.begin(), Selected.end());
+		Selected.SetNum(static_cast<int32>(NewEnd - Selected.begin()));
+
+		if (Stats.bCollecting)
+		{
+			Frame.MeshMatchedItems += Selected.size();
+
+			if (Selected.IsEmpty())
+				++Frame.MeshNoReceiverDecals;
+		}
 	}
 }

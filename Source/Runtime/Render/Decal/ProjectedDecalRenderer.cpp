@@ -140,7 +140,7 @@ namespace
 		if (MaxDepth >= View.FarClip - FarMargin)
 			return EDecalDepthGeometry::FullscreenFar;
 
-		
+
 		return EDecalDepthGeometry::Volume;
 	}
 }
@@ -232,9 +232,12 @@ bool FProjectedDecalRenderer::IsReady() const
 bool FProjectedDecalRenderer::OnRenderMesh(
 	std::span<const FMeshDrawBatch> ReceiverBatches,
 	std::span<const FProjectedDecalRenderData> Decals,
+	std::span<const FProjectedDecalMeshDrawList> DrawLists,
 	bool bUnlitPass,
 	FDecalFrameStats* Stats)
 {
+	assert(DrawLists.size() == Decals.size());
+
 	// 그릴 것이 없는 것은 정상적인 성공으로 취급한다.
 	if (Decals.empty() ||
 		ReceiverBatches.empty())
@@ -247,18 +250,18 @@ bool FProjectedDecalRenderer::OnRenderMesh(
 		return false;
 	}
 
-	bool bSubmitted = false;
-
-	// 바인딩 전에 필요한 셰이더를 확인한다.
-	for (const FMeshDrawBatch& Batch : ReceiverBatches)
+	// 바인딩 전에 인덱스 유효성 확인.
+	for (const FProjectedDecalMeshDrawList& List : DrawLists)
 	{
-		if (Batch.Items.IsEmpty())
-			continue;
-
-		if (!Batch.Pipeline.Shader ||
-			!Batch.Pipeline.Shader->VertexShader)
+		for (const FDecalReceiverItemRef& Ref : List.Items)
 		{
-			return false;
+			if (Ref.BatchIndex >= ReceiverBatches.size())
+				return false;
+
+			if (Ref.ItemIndex >= ReceiverBatches[Ref.BatchIndex].Items.Num())
+			{
+				return false;
+			}
 		}
 	}
 
@@ -267,9 +270,10 @@ bool FProjectedDecalRenderer::OnRenderMesh(
 		ConstantBuffer.get(),
 		EShaderBindFlagBits::Pixel);
 
-	// SortOrder로 정렬된 순서.
-	for (const FProjectedDecalRenderData& Decal : Decals)
+	for (size_t DecalIndex = 0; DecalIndex < Decals.size(); ++DecalIndex)
 	{
+		const FProjectedDecalRenderData& Decal = Decals[DecalIndex];
+
 		if (Decal.bUnlit != bUnlitPass)
 			continue;
 
@@ -280,6 +284,12 @@ bool FProjectedDecalRenderer::OnRenderMesh(
 			continue;
 		}
 
+		const auto& Selected = DrawLists[DecalIndex].Items;
+
+		// 수신 상대가 없는 데칼은 상수 갱신도 생략.
+		if (Selected.IsEmpty())
+			continue;
+
 		const FProjectedDecalConstants Constants =
 			MakeProjectedDecalConstants(Decal);
 
@@ -288,44 +298,57 @@ bool FProjectedDecalRenderer::OnRenderMesh(
 			&Constants,
 			sizeof(Constants));
 
-		// 데칼마다 다른 머티리얼 텍스처.
 		RenderCommand::BindShaderResource(
 			0,
 			Decal.ColorTexture,
 			EShaderBindFlagBits::Pixel);
 
-		for (const FMeshDrawBatch& SourceBatch : ReceiverBatches)
+
+		bool bSubmitted = false;
+		size_t Cursor = 0;
+
+		while (Cursor < Selected.size())
 		{
-			if (SourceBatch.Items.IsEmpty())
-				continue;
+			const uint32 BatchIndex = Selected[Cursor].BatchIndex;
+
+			const FMeshDrawBatch& SourceBatch = ReceiverBatches[BatchIndex];
 
 			FMeshDrawBatch Batch = SourceBatch;
+			Batch.Items.Reset();
 
-			// 머티리얼의 PSO를 사용하지 않는다.
+			while (Cursor < Selected.size() &&
+				Selected[Cursor].BatchIndex == BatchIndex)
+			{
+				FMeshDrawBatch::FItem Item =
+					SourceBatch.Items[Selected[Cursor].ItemIndex];
+
+				// Prepass용 스텐실 참조값 override는 사용하지 않음.
+				Item.bOverrideStencilRef = false;
+
+				Batch.Items.Add(Item);
+				++Cursor;
+			}
+
 			Batch.Pipeline = MeshPipelineState;
 
-			// 원본 표면과 같은 컬링, 래스터 규칙을 유지한다.
-			Batch.Pipeline.RasterizerState =
-				SourceBatch.Pipeline.RasterizerState;
+			Batch.Pipeline.RasterizerState = SourceBatch.Pipeline.RasterizerState;
 
 			Batch.bForceWireframe = false;
-
 			Batch.bBindViewConstants = false;
 			Batch.bUseObjectSlots = false;
 
 			Batch.ObjectBindingSlot = 0;
-			Batch.ObjectStages =
-				EShaderBindFlagBits::Vertex;
+			Batch.ObjectStages = EShaderBindFlagBits::Vertex;
 
-			// 전용 데칼 셰이더는 원래 재질 상수를 사용하지 않는다.
 			Batch.MaterialDataSize = 0;
-
-			// 원래 재질 텍스처가 데칼 t0를 덮어쓰지 않게 한다.
 			Batch.Textures.Reset();
 
 			Batch.Sampler = Decal.Sampler;
 			Batch.SamplerStages = EShaderBindFlagBits::Pixel;
 
+			Renderer->DrawMeshes(std::span<const FMeshDrawBatch>(&Batch, 1));
+
+			bSubmitted = true;
 
 			if (Stats)
 			{
@@ -335,12 +358,6 @@ bool FProjectedDecalRenderer::OnRenderMesh(
 					Stats->SubmittedTriangles += Item.IndexCount / 3;
 				}
 			}
-			// 원본 MaterialData는 유지한다.
-			// 재사용하는 VS의 UVTransform 등도 기존 값으로 바인딩한다.
-			Renderer->DrawMeshes(
-				std::span<const FMeshDrawBatch>(&Batch, 1));
-
-			bSubmitted = true;
 		}
 
 		if (Stats && bSubmitted)
@@ -351,7 +368,6 @@ bool FProjectedDecalRenderer::OnRenderMesh(
 				++Stats->SubmittedLit;
 		}
 	}
-
 
 	RenderCommand::BindConstantBuffer(
 		4,

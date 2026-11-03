@@ -4,6 +4,7 @@
 #include "Render/PipelineState.h"
 #include "Render/Texture2D.h"
 #include "Render/Decal/ProjectedDecal.h"
+#include "Render/Decal/DecalMeshDrawList.h"
 
 #include <span>
 
@@ -26,6 +27,7 @@ public:
 	bool OnRenderMesh(
 		std::span<const FMeshDrawBatch> ReceiverBatches,
 		std::span<const FProjectedDecalRenderData> Decals,
+		std::span<const FProjectedDecalMeshDrawList> DrawLists,
 		bool bUnlitPass,
 		FDecalFrameStats* Stats = nullptr);
 

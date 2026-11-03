@@ -104,7 +104,7 @@ public:
 
 	static void SetRasterizerState(ERasterizerState State);
 	static void SetBlendState(EBlendState State);
-	static void SetDepthStencilState(EDepthStencilState State);
+	static void SetDepthStencilState(EDepthStencilState State, uint32 StencilRef = 0);
 	static void BindSamplerState(uint32 Slot, ESamplerState SamplerState, EShaderBindFlagBits FlagBits);
 
 	//Compute Shader Commands

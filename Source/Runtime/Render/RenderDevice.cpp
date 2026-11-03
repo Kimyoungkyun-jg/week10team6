@@ -397,6 +397,70 @@ void FRenderDevice::CreateStates()
 		DecalDesc.StencilEnable = FALSE;
 
 		Device->CreateDepthStencilState(&DecalDesc, DepthStencilStates[(uint8)EDepthStencilState::DecalEqualReadOnly].GetAddressOf());
+		
+		// Detph Prepass:
+		// 최종적으로 보이는 표면의 수신 여부를 기록한다.
+		{
+			D3D11_DEPTH_STENCIL_DESC Desc{};
+
+			Desc.DepthEnable = TRUE;
+			Desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+			Desc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+
+			Desc.StencilEnable = TRUE;
+			Desc.StencilReadMask = StencilBits::ReceiveDecal;
+			Desc.StencilWriteMask = StencilBits::ReceiveDecal;
+
+			Desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+			Desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+			Desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+			Desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+			Desc.BackFace = Desc.FrontFace;
+
+			const HRESULT Result = Device->CreateDepthStencilState(
+				&Desc,
+				DepthStencilStates[
+					static_cast<uint8>(
+						EDepthStencilState::DecalReceiverWrite)
+				].GetAddressOf());
+
+			if (FAILED(Result))
+			{
+				HTR_LOG(Error, "Create DecalReceiverWrite failed: 0x{:08x}", static_cast<uint32>(Result));
+			}
+		}
+
+		// Depth Reconstruction:
+		// 수신 비트가 1인 픽셀만 통과시킨다.
+		{
+			D3D11_DEPTH_STENCIL_DESC Desc{};
+
+			Desc.DepthEnable = TRUE;
+			Desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+			Desc.DepthFunc = D3D11_COMPARISON_ALWAYS;
+
+			Desc.StencilEnable = TRUE;
+			Desc.StencilReadMask = StencilBits::ReceiveDecal;
+			Desc.StencilWriteMask = 0;
+
+			Desc.FrontFace.StencilFunc = D3D11_COMPARISON_EQUAL;
+			Desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+			Desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+			Desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+			Desc.BackFace = Desc.FrontFace;
+
+			const HRESULT Result = Device->CreateDepthStencilState(
+				&Desc,
+				DepthStencilStates[
+					static_cast<uint8>(
+						EDepthStencilState::DecalReceiverTest)
+				].GetAddressOf());
+
+			if (FAILED(Result))
+			{
+				HTR_LOG(Error, "Create DecalReceiverTest failed: 0x{:08x}", static_cast<uint32>(Result));
+			}
+		}
 	}
 
 	// ---------- Blend ----------

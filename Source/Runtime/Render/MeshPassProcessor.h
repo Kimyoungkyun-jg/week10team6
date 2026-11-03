@@ -36,6 +36,8 @@ struct FMeshDrawBatch
 		const void* ObjectKey = nullptr;
 		bool bOccludedByGpu = false;
 		bool bReceiveDecal = true;
+		bool bOverrideStencilRef = false;
+		uint32 StencilRef = 0;
 	};
 
 	FPipelineState Pipeline;

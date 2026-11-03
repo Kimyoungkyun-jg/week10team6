@@ -120,7 +120,7 @@ void RenderCommand::BindPipelineState(const FPipelineState& PipelineState)
 	SetPrimitiveTopology(PipelineState.Topology);
 	SetRasterizerState(PipelineState.RasterizerState);
 	SetBlendState(PipelineState.BlendState);
-	SetDepthStencilState(PipelineState.DepthStencilState);
+	SetDepthStencilState(PipelineState.DepthStencilState, PipelineState.StencilRef);
 }
 
 void RenderCommand::BindShaderProgram(FShaderProgram* Shader)
@@ -425,9 +425,9 @@ void RenderCommand::SetBlendState(EBlendState State)
 	RenderDevice->GetContext()->OMSetBlendState(RenderDevice->GetBlendState(State), nullptr, 0xffffffff);
 }
 
-void RenderCommand::SetDepthStencilState(EDepthStencilState State)
+void RenderCommand::SetDepthStencilState(EDepthStencilState State, uint32 StencilRef)
 {
-	RenderDevice->GetContext()->OMSetDepthStencilState(RenderDevice->GetDepthStencilState(State), 0);
+	RenderDevice->GetContext()->OMSetDepthStencilState(RenderDevice->GetDepthStencilState(State), StencilRef);
 }
 
 void RenderCommand::BindSamplerState(uint32 Slot, ESamplerState SamplerState, EShaderBindFlagBits FlagBits)

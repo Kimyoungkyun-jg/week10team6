@@ -44,6 +44,8 @@ private:
 	void DrawBones(FLineBatcher& Lines, const FMatrix& ViewProjection) const;
 	// 기즈모 조작 시 본 트랜스폼 및 스키닝 갱신 콜백
 	void OnBoneTransformModified(int32 BoneIndex, const FTransform& NewWorldTransform);
+	// 레이 캐스트를 이용한 본 선택
+	bool PickBone(const FRay& Ray);
 	
 	// 초기 레이아웃 설정
 	void SetInitialLayout();

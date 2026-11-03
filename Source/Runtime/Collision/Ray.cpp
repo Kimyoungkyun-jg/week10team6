@@ -226,3 +226,19 @@ bool RayIntersectsPlane(const FRay& Ray, const FVector& PlanePoint, const FVecto
 
     return OutT >= 0.0f;
 }
+
+bool RayIntersectsSphere(const FRay& Ray, const FVector& SphereCenter, float SphereRadius, float& OutT)
+{
+	FVector m = Ray.Origin - SphereCenter;
+	float b = m.Dot(Ray.Direction);
+	float c = m.Dot(m) - SphereRadius * SphereRadius;
+	if (c > 0.0f && b > 0.0f)
+		return false;
+	float discriminant = b * b - c;
+	if (discriminant < 0.0f)
+		return false;
+	OutT = -b - sqrtf(discriminant);
+	if (OutT < 0.0f)
+		OutT = 0.0f;
+	return true;
+}

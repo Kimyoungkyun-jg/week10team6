@@ -9,6 +9,7 @@
 #include "Render/LineBatcher.h"
 #include "Render/Texture2D.h"
 #include "Editor/Gizmo/GizmoRenderer.h"
+#include "Collision/Ray.h"
 
 #include <algorithm>
 #include <cctype>
@@ -256,6 +257,11 @@ void FSkeletalMeshViewerPanel::DrawViewport()
 		Gizmo.Update(MouseRay, LocalMouse, Viewport.GetViewProjectionMatrix(),
 			static_cast<int>(Size.x), static_cast<int>(Size.y),
 			bMouseDown, Viewport.GetViewLocation(), false);
+
+		if (ImGui::IsItemHovered() && bMouseDown && !Gizmo.IsUsing() && Gizmo.GetHoveredAxis() < 0)
+		{
+			PickBone(MouseRay);
+		}
 
 		if (!Gizmo.IsUsing() && ImGui::IsItemHovered())
 		{
@@ -570,4 +576,38 @@ void FSkeletalMeshViewerPanel::OnBoneTransformModified(int32 BoneIndex, const FT
 
 	MeshComponent->SetBoneTransform(BoneIndex, NewLocalMatrix);
 	MeshComponent->PerformCPUSkinning();
+}
+
+bool FSkeletalMeshViewerPanel::PickBone(const FRay& Ray)
+{
+	if (!CurrentMesh || !MeshComponent) return false;
+	const TArray<FMatrix>& Global = MeshComponent->GetGlobalBoneTransforms();
+	const FMatrix World = MeshComponent->GetWorldMatrix();
+	const float MeshSize = std::max(0.01f, (CurrentMesh->MeshData.AABB.Max - CurrentMesh->MeshData.AABB.Min).Size());
+	const float JointRadius = MeshSize * 0.01f;
+	int32 ClosestBoneIndex = -1;
+	float ClosestDistance = FLT_MAX;
+	for (int32 Bone = 0; Bone < Global.Num(); ++Bone)
+	{
+		const FVector Head = (Global[Bone] * World).TransformPosition(FVector::ZeroVector);
+		float Distance;
+		if (RayIntersectsSphere(Ray, Head, JointRadius, Distance))
+		{
+			if (Distance < ClosestDistance)
+			{
+				ClosestDistance = Distance;
+				ClosestBoneIndex = Bone;
+			}
+		}
+	}
+	if (ClosestBoneIndex >= 0)
+	{
+		SelectBone(ClosestBoneIndex);
+		return true;
+	}
+	else
+	{
+		SelectBone(-1);
+	}
+	return false;
 }

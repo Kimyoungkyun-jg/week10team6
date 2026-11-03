@@ -45,3 +45,5 @@ FVector2 WorldToScreen(const FVector& WorldPos, const FMatrix& ViewProj, int Scr
 float DistanceToSegment(const FVector2& P, const FVector2& A, const FVector2& B);
 
 bool RayIntersectsPlane(const FRay& Ray, const FVector& PlanePoint, const FVector& PlaneNormal, float& OutT);
+
+bool RayIntersectsSphere(const FRay& Ray, const FVector& SphereCenter, float SphereRadius, float& OutT);

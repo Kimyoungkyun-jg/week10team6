@@ -39,6 +39,7 @@ public:
 	void OpenFBX(const FString& Path);
 	void Release();
 	const TArray<TUniquePtr<FSkeletalMeshViewer>>& GetViewers() const { return Viewers; }
+	bool HasFocuesdViewer() const { return IsOpen() && bHasFocusedViewer; }
 
 private:
 	void DrawViewport(FSkeletalMeshViewer& Viewer);
@@ -48,4 +49,5 @@ private:
 
 	TArray<TUniquePtr<FSkeletalMeshViewer>> Viewers;
 	uint32 NextId = 0;
+	bool bHasFocusedViewer = false;
 };

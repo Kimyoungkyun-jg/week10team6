@@ -265,6 +265,7 @@ bool UEditorEngine::Init()
 
 	EditorControlsPanel->SetWorld(EditorWorld);
 	EditorControlsPanel->SetIsPlayingQuery([this]() { return IsPlaying(); });
+	EditorControlsPanel->SetSkipGizmoHotkeyQuery([this]() { return SkeletalMeshViewerPanel->HasFocuesdViewer(); });
 	EditorControlsPanel->SetGizmo(Gizmo.get());
 	EditorControlsPanel->SetViewportsPanel(ViewportsPanel);
 

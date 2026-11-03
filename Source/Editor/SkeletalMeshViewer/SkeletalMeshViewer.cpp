@@ -70,6 +70,8 @@ void FSkeletalMeshViewerPanel::Release()
 
 void FSkeletalMeshViewerPanel::OnRender()
 {
+	bHasFocusedViewer = false;
+
 	// x 버튼으로 닫은 뷰어는 다음 프레임 맨 앞에서 지운다
 	for (int32 i = Viewers.Num() - 1; i >= 0; --i)
 		if (!Viewers[i]->bOpen)
@@ -82,6 +84,14 @@ void FSkeletalMeshViewerPanel::OnRender()
 		Viewer->bVisible = ImGui::Begin(Title.c_str(), &Viewer->bOpen);
 		if (Viewer->bVisible)
 		{
+			const bool bFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+			bHasFocusedViewer |= bFocused;
+			if (bFocused && !Viewer->Gizmo.IsUsing() && ImGui::IsKeyPressed(ImGuiKey_Space, false))
+			{
+				const int NextMode = (static_cast<int>(Viewer->Gizmo.GetMode()) + 1) % 3;
+				Viewer->Gizmo.SetMode(static_cast<EGizmoMode>(NextMode));
+			}
+
 			ImGui::BeginChild("Bones", ImVec2(250.0f, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
 			DrawBoneTree(*Viewer);
 			ImGui::EndChild();

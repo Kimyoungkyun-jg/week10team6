@@ -33,6 +33,7 @@ public:
 	inline void SetWorld(UWorld* InWorld) { World = InWorld; }
 	inline void SetViewportsPanel(FViewportsPanel* InPanel) { ViewportsPanel = InPanel; }
 	inline void SetIsPlayingQuery(std::function<bool()> InQuery) { IsPlayingQuery = InQuery; }
+	inline void SetSkipGizmoHotkeyQuery(std::function<bool()> Inquery) { SkipGizmoHotkeyQuery = std::move(Inquery); }
 
 	float DeltaTime = 1.0f;
 	UWorld* World = nullptr;
@@ -81,5 +82,6 @@ private:
 
     void DrawCameraProperties();
 	std::function<bool()> IsPlayingQuery;
+	std::function<bool()> SkipGizmoHotkeyQuery;
 };
 

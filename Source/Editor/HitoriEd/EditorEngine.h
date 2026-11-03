@@ -30,6 +30,7 @@
 #include "Editor/ContentDrawer/ContentDrawerPanel.h"
 #include "Editor/UIEditor/UIEditorPanel.h"
 #include "Editor/SkeletalRetarget/PoseRetargetPanel.h"
+#include "Editor/SkeletalMeshViewer/SkeletalMeshViewerPanel.h"
 
 #include "Editor/Rendering/Outline.h"
 #include "Editor/Rendering/OutLineRenderer.h"
@@ -179,6 +180,7 @@ private:
 	FContentDrawerPanel* ContentDrawerPanel = nullptr;
 	FUIEditorPanel* UIEditorPanel = nullptr;
 	FPoseRetargetPanel* PoseRetargetPanel = nullptr;
+	FSkeletalMeshViewerPanel* SkeletalMeshViewerPanel = nullptr;
 
 	UWorld* EditorWorld = nullptr;
 	UWorld* PlayWorld = nullptr;

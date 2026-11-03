@@ -175,6 +175,10 @@ bool UEditorEngine::Init()
 	UIEditorPanel = EditorUI->AddEditorPanel<FUIEditorPanel>();
 	PoseRetargetPanel = EditorUI->AddEditorPanel<FPoseRetargetPanel>();
 	PoseRetargetPanel->SetOpen(false);
+
+	SkeletalMeshViewerPanel = EditorUI->AddEditorPanel<FSkeletalMeshViewerPanel>();
+	SkeletalMeshViewerPanel->SetOpen(true);
+
 	ContentDrawerPanel->SetCreateWidgetCallback([this](const FString& Path) { UIEditorPanel->NewAsset(Path); });
 	ContentDrawerPanel->SetOpenWidgetCallback([this](const FString& Path) { UIEditorPanel->OpenAsset(Path); });
 
@@ -702,6 +706,31 @@ void UEditorEngine::RenderViewports()
 					{
 						PoseRetargetPanel->DrawBones(Index, *LineBatcher, View.ViewProjectionMatrix);
 					};
+				});
+		}
+	}
+	if (SkeletalMeshViewerPanel && SkeletalMeshViewerPanel->IsOpen())
+	{
+		UWorld* World = SkeletalMeshViewerPanel->GetWorld();
+		FEditorViewportClient& Client = SkeletalMeshViewerPanel->GetViewport();
+
+		if (World && Client.GetWidth() > 1 && Client.GetHeight() > 1)
+		{
+			World->GetScene().UpdateAllTransforms();
+			FSceneView View = Client.CalcSceneView();
+			FSceneRenderOptions Options;
+			BuildSceneRenderOptions(&Client, false, Options);
+			Options.bDrawPrimitives = true;
+
+			FSceneRenderer SceneRenderer(World, View, Client.GetRenderData());
+			SceneRenderer.InitViews(Renderer, Options);
+			RenderScene(Client.GetViewTargets(), View, SceneRenderer, World, Options,
+				[this, &View](FSceneOverlayCallbacks& Overlays)
+				{
+					Overlays.EditorGizmo = [this, &View]
+						{
+							SkeletalMeshViewerPanel->DrawOverlay(*LineBatcher, *GizmoRenderer, View.ViewProjectionMatrix);
+						};
 				});
 		}
 	}
@@ -1284,6 +1313,7 @@ void UEditorEngine::PreExit()
 	// 시퀀서는 에디터 월드 액터를 가리키므로 월드보다 먼저 정리한다
 	if (SequencerPanel) SequencerPanel->Shutdown();
 	if (PoseRetargetPanel) PoseRetargetPanel->Release();
+	if (SkeletalMeshViewerPanel) SkeletalMeshViewerPanel->Release();
 	EditorWorld->ClearWorld();
 	// PIE 창이 열린 채 종료하면 Device가 살아 있을 때 Swapchain과 타깃을 먼저 정리한다.
 	DestroyPIEWindow();

@@ -114,12 +114,18 @@ void FSkeletalMeshViewerPanel::DrawViewport(FSkeletalMeshViewer& Viewer)
 	Viewer.ViewSize = Size;
 
 	const ImVec2 Min = ImGui::GetCursorScreenPos();
-	ImGui::InvisibleButton("##Viewport", Size, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+	const bool bClicked = ImGui::InvisibleButton("##Viewport", Size, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
 
 	if (FTexture2D* Color = Viewer.Client.GetColorTarget())
 		ImGui::GetWindowDrawList()->AddImage(Color->GetSRV(), Min, ImVec2(Min.x + Size.x, Min.y + Size.y));
 
-	DrawSkeleton(Viewer, Min, Size);
+	const int32 HoveredJoint = DrawSkeleton(Viewer, Min, Size);
+
+	if (bClicked && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !Viewer.Gizmo.IsUsing())
+	{
+		SelectBone(Viewer, HoveredJoint);
+		Viewer.bScrollTreeToSelection = HoveredJoint >= 0;
+	}
 	
 	const bool bLeftDown = ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
 	UpdateBoneGizmo(Viewer, Min, bLeftDown);
@@ -156,9 +162,12 @@ void FSkeletalMeshViewerPanel::DrawBoneNode(FSkeletalMeshViewer& Viewer, int32 B
 	// Bone 이름이 겹칠 수 있으므로 ID는 Index로
 	const bool bOpen = ImGui::TreeNodeEx(reinterpret_cast<void*>(static_cast<intptr_t>(BoneIndex)), Flags, "%s", Bone.Name.c_str());
 	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
+		SelectBone(Viewer, BoneIndex);
+
+	if (BoneIndex == Viewer.SelectedBone && Viewer.bScrollTreeToSelection)
 	{
-		Viewer.SelectedBone = BoneIndex;
-		Viewer.Gizmo.SetTarget(Viewer.BoneGizmoTarget);
+		ImGui::SetScrollHereY(0.5f);
+		Viewer.bScrollTreeToSelection = false;
 	}
 
 	if (bOpen && !bLeaf)
@@ -169,12 +178,12 @@ void FSkeletalMeshViewerPanel::DrawBoneNode(FSkeletalMeshViewer& Viewer, int32 B
 	}
 }
 
-void FSkeletalMeshViewerPanel::DrawSkeleton(FSkeletalMeshViewer& Viewer, const ImVec2& ViewMin, const ImVec2& ViewSize)
+int32 FSkeletalMeshViewerPanel::DrawSkeleton(FSkeletalMeshViewer& Viewer, const ImVec2& ViewMin, const ImVec2& ViewSize)
 {
 	const TArray<FBoneInfo>& Bones = Viewer.MeshComponent->GetSkeletalMesh()->MeshData.Bones;
 	const TArray<FMatrix>& Globals = Viewer.MeshComponent->GetGlobalBoneTransforms();
 	if (Globals.Num() != Bones.Num())
-		return;
+		return -1;
 
 	const FMatrix ComponentWorld = Viewer.MeshComponent->GetWorldMatrix();
 	const FMatrix ViewProj = Viewer.Client.GetViewProjectionMatrix();
@@ -189,6 +198,22 @@ void FSkeletalMeshViewerPanel::DrawSkeleton(FSkeletalMeshViewer& Viewer, const I
 
 	const auto IsBehind = [&](int32 i) { return Joints[i].X == -FLT_MAX;};
 	const auto ToScreen = [&](int32 i) { return ImVec2(ViewMin.x + Joints[i].X, ViewMin.y + Joints[i].Y); };
+
+	const ImVec2 Mouse = ImGui::GetMousePos();
+	int32 HoveredJoint = -1;
+	float BestDistSq = 8.0f * 8.0f;
+	for (int32 i = 0; i < Bones.Num(); ++i)
+	{
+		if (IsBehind(i))
+			continue;
+		const ImVec2 P = ToScreen(i);
+		const float DistSq = (P.x - Mouse.x) * (P.x - Mouse.x) + (P.y - Mouse.y) * (P.y - Mouse.y);
+		if (DistSq < BestDistSq)
+		{
+			BestDistSq = DistSq;
+			HoveredJoint = i;
+		}
+	}
 	
 	ImDrawList* DL = ImGui::GetWindowDrawList();
 	DL->PushClipRect(ViewMin, ImVec2(ViewMin.x + ViewSize.x, ViewMin.y + ViewSize.y), true);
@@ -202,13 +227,20 @@ void FSkeletalMeshViewerPanel::DrawSkeleton(FSkeletalMeshViewer& Viewer, const I
 			DL->AddLine(ToScreen(Parent), ToScreen(i), IM_COL32(220, 220, 220, 180), 1.5f);
 
 		const bool bSelected = (i == Viewer.SelectedBone);
-		DL->AddCircleFilled(
-			ToScreen(i),
-			bSelected ? 5.0f : 3.0f,
-			bSelected ? IM_COL32(255, 170, 40, 255) : IM_COL32(100, 190, 255, 255)
-		);
+		const bool bHovered = (i == HoveredJoint);
+		const ImU32 Color = bSelected 
+			? IM_COL32(255, 170, 40, 255)
+			: (bHovered ? IM_COL32(255, 255, 255, 255) : IM_COL32(100, 190, 255, 255));
+		DL->AddCircleFilled(ToScreen(i), (bSelected || bHovered) ? 5.0f : 3.0f, Color);
 	}
 	DL->PopClipRect();
+	return HoveredJoint;
+}
+
+void FSkeletalMeshViewerPanel::SelectBone(FSkeletalMeshViewer& Viewer, int32 BoneIndex)
+{
+	Viewer.SelectedBone = BoneIndex;
+	Viewer.Gizmo.SetTarget(BoneIndex >= 0 ? Viewer.BoneGizmoTarget : nullptr);
 }
 
 void FSkeletalMeshViewerPanel::UpdateBoneGizmo(FSkeletalMeshViewer& Viewer, const ImVec2& ViewMin, bool bLeftDown)

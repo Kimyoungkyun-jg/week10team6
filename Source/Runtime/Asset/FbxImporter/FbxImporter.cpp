@@ -226,6 +226,11 @@ namespace
                 );
             }
 
+            // cluster 또는 BindPose에서 바인드 포즈를 받은 본 표시
+            // TArray<bool>은 std::vector<bool> 프록시라 operator[]가 bool&를 못 돌려주므로 uint8 사용
+            TArray<uint8> bHasBindData;
+            bHasBindData.Init(0, Out.Bones.Num());
+
             // 스킨 디포머 파싱
             //int SkinCount = Mesh->GetDeformerCount(fbxsdk::FbxDeformer::eSkin);
             for (int i = 0; i < SkinCount; ++i)
@@ -258,6 +263,7 @@ namespace
                     FMatrix GlobalBindPose = ConvertFbxMatrix(TransformLinkMatrix);
                     Out.Bones[BoneIndex].GlobalBindPose = GlobalBindPose;
                     Out.Bones[BoneIndex].InverseBindPose = GlobalBindPose.Inverse();
+                    bHasBindData[BoneIndex] = 1;
 
                     // 이 본이 영향을 주는 정점 인덱스와 가중치 읽기
                     int IndexCount = Cluster->GetControlPointIndicesCount();
@@ -291,13 +297,25 @@ namespace
                         if (Out.Bones[BoneIndex].Name == PoseNode->GetName())
                         {
                             Out.Bones[BoneIndex].GlobalBindPose = ConvertFbxMatrix(BindPose->GetMatrix(PoseIndex));
+                            bHasBindData[BoneIndex] = 1;
                             break;
                         }
                     }
                 }
             }
-            // ?뺤젏??MeshMatrix濡?蹂?섎릺????怨듦컙(+X Forward, +Y Right, +Z Up)???뺣젹?섏뿀?쇰?濡? 蹂???떆 ??怨듦컙 洹몃?濡?留ㅼ묶
-            // (MeshBindInverse瑜?怨깊븯硫?硫붿돩? 蹂몄씠 ?ㅼ떆 釉붾젋??濡쒖뺄 怨듦컙?쇰줈 ??쉶?꾨릺??踰꾨┝)
+
+            // cluster/BindPose 어디에도 없는 본(_end 등)은 부모 바인드 포즈 기준으로 재계산
+            // 좌표계 변환 시 노드에는 회전만, BindPose/cluster에는 반사까지 적용되어 EvaluateGlobalTransform 값과 어긋남
+            // Bones는 DFS 전위 순서라 부모가 항상 먼저 계산됨
+            for (int32 b = 0; b < Out.Bones.Num(); ++b)
+            {
+                const int32 p = Out.Bones[b].ParentIndex;
+                if (!bHasBindData[b] && p != -1)
+                {
+                    Out.Bones[b].GlobalBindPose = Out.Bones[b].LocalBindPose * Out.Bones[p].GlobalBindPose;
+                }
+            }
+
             for (FBoneInfo& Bone : Out.Bones)
             {
                 Bone.InverseBindPose = Bone.GlobalBindPose.Inverse();

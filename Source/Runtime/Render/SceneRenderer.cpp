@@ -22,6 +22,7 @@
 #include "Render/PostProcess/ToneMapData.h"
 #include "Render/Decal/ProjectedDecalRenderer.h"
 #include "Render/Decal/DecalStats.h"
+#include "Render/Decal/DecalBounds.h"
 #include "Text/TextRenderer.h"
 #include "UObject/UObjectIterator.h"
 

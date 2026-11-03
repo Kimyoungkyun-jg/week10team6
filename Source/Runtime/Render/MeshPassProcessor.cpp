@@ -220,7 +220,8 @@ namespace
 
 	FMeshDrawBatch::FItem BuildItem(const FMatrix& World, const FSceneView& View,
 		EMeshPassType Pass, uint32 Slot, uint32 StartIndex, uint32 IndexCount,
-		const void* ObjectKey, bool bOccludedByGpu, bool bReceiveShadow, bool bReceiveDecal)
+		const void* ObjectKey, bool bOccludedByGpu, bool bReceiveShadow, bool bReceiveDecal,
+		const FPrimitiveSceneProxy* Proxy)
 	{
 		FMeshDrawBatch::FItem Item{};
 		Item.ObjectSlot = Slot;
@@ -229,6 +230,7 @@ namespace
 		Item.ObjectKey = ObjectKey;
 		Item.bOccludedByGpu = bOccludedByGpu;
 		Item.bReceiveDecal = bReceiveDecal;
+		Item.Proxy = Proxy;
 
 		if (Pass == EMeshPassType::Forward || Pass == EMeshPassType::WorldNormal)
 		{
@@ -302,7 +304,7 @@ bool FMeshPassProcessor::Build(const FSceneView& View, const FRenderQueue& Queue
 
 			for (const FStaticDrawItem& Item : Group->Items)
 				Batch.Items.Add(BuildItem(Item.Proxy->GetLocalToWorld(), View, Pass, Item.Slot,
-					Item.StartIndex, Item.IndexCount, Item.Proxy, Item.bOccludedByGpu != 0, Item.Proxy->bReceiveShadow, Item.Proxy->bReceiveDecal));
+					Item.StartIndex, Item.IndexCount, Item.Proxy, Item.bOccludedByGpu != 0, Item.Proxy->bReceiveShadow, Item.Proxy->bReceiveDecal, Item.Proxy));
 			Out.Add(std::move(Batch));
 		}
 	}
@@ -334,7 +336,7 @@ bool FMeshPassProcessor::Build(const FSceneView& View, const FRenderQueue& Queue
 		const void* ObjectKey = Packet.Proxy ? static_cast<const void*>(Packet.Proxy) : static_cast<const void*>(&Packet);
 
 		Batch.Items.Add(BuildItem(PacketWorld(Packet), View, Pass, Packet.Slot,
-			Packet.StartIndex, IndexCount, ObjectKey, Packet.bOccludedByGpu, !Packet.Proxy || Packet.Proxy->bReceiveShadow, !Packet.Proxy || Packet.Proxy->bReceiveDecal));
+			Packet.StartIndex, IndexCount, ObjectKey, Packet.bOccludedByGpu, !Packet.Proxy || Packet.Proxy->bReceiveShadow, !Packet.Proxy || Packet.Proxy->bReceiveDecal, Packet.Proxy));
 		Out.Add(std::move(Batch));
 	}
 	return true;

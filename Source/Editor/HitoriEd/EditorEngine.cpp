@@ -731,7 +731,8 @@ void UEditorEngine::RenderViewports()
 						{
 							SkeletalMeshViewerPanel->DrawOverlay(*LineBatcher, *GizmoRenderer, View.ViewProjectionMatrix);
 						};
-				});
+				},
+				SkeletalMeshViewerPanel->GetSkybox());
 		}
 	}
 }
@@ -1047,11 +1048,13 @@ void UEditorEngine::RenderGameFrame(FGameViewportClient* GameClient, const FScen
 
 bool UEditorEngine::RenderScene(FSceneViewTargets& Targets, const FSceneView& SceneView,
 	FSceneRenderer& SceneRenderer, UWorld* TargetWorld, const FSceneRenderOptions& Options,
-	const std::function<void(FSceneOverlayCallbacks&)>& BuildOverlays)
+	const std::function<void(FSceneOverlayCallbacks&)>& BuildOverlays,
+	FSkyboxRenderer* SkyboxOverride)
 {
 	return SceneRenderer.Render(Renderer, Targets, Options,
 		[&](FScenePassCallbacks& Callbacks)
 		{
+			Callbacks.SkyboxOverride = SkyboxOverride;
 			FTexture2D* ColorTarget = Targets.SceneColor.get();
 			FTexture2D* DepthTarget = Targets.Depth.get();
 			if (SceneDepthRenderer)

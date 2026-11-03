@@ -1,14 +1,24 @@
 #include "EnginePCH.h"
 #include "SkeletalMeshViewerPanel.h"
+
 #include "Asset/AssetManager.h"
+
 #include "Engine/World.h"
+
+#include "Editor/Gizmo/GizmoRenderer.h"
+
+#include "GameFramework/Actor/StaticMeshActor.h"
 #include "GameFramework/Actor/SkeletalMeshActor.h"
 #include "GameFramework/Actor/SkyLightActor.h"
+#include "GameFramework/Actor/DirectionalLightActor.h"
+
 #include "Components/SkeletalMeshComponent.h"
+
 #include "Render/SkeletalMesh.h"
 #include "Render/LineBatcher.h"
 #include "Render/Texture2D.h"
-#include "Editor/Gizmo/GizmoRenderer.h"
+#include "Render/SkyboxRenderer.h"
+
 #include "Collision/Ray.h"
 
 #include <algorithm>
@@ -116,22 +126,46 @@ namespace
 
 bool FSkeletalMeshViewerPanel::Init()
 {
-	// 1. 뷰어 전용 독립 월드 생성 (메인 레벨과 분리)
+	// 뷰어 전용 독립 월드 생성 (메인 레벨과 분리)
 	PreviewWorld = UWorld::CreateWorld(EWorldType::Editor, false);
 	if (!PreviewWorld) return false;
 
-	// 2. 스켈레탈 메시 액터 스폰
+	// 스켈레탈 메시 액터 스폰
 	PreviewActor = PreviewWorld->SpawnActor<ASkeletalMeshActor>();
 	if (!PreviewActor) return false;
+	PreviewActor->GetSkeletalMeshComponent()->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
 	MeshComponent = PreviewActor->GetSkeletalMeshComponent();
 
-	// 3. 기본 스카이라이트 조명 스폰
+	// 기본 스카이라이트 조명 스폰
 	if (ASkyLightActor* SkyLight = PreviewWorld->SpawnActor<ASkyLightActor>())
 	{
 		SkyLight->GetBillboardComponent()->SetVisibility(false);
+		SkyLight->GetLightComponent()->SetIntensity(0.3f);
+	}
+	// 기본 디렉셔널라이트 스폰
+	if (ADirectionalLightActor* DirLight = PreviewWorld->SpawnActor<ADirectionalLightActor>())
+	{
+		DirLight->GetBillboardComponent()->SetVisibility(false);
+		DirLight->GetArrowComponent()->SetVisibility(false);
+		DirLight->GetLightComponent()->SetIntensity(0.3f);
+		DirLight->GetLightComponent()->SetRelativeRotation(FRotator(10.0f, 30.0f, -140.0f));
 	}
 
-	// 4. 뷰포트 카메라 셋업
+	if (AStaticMeshActor* Floor = PreviewWorld->SpawnActor<AStaticMeshActor>())
+	{
+		Floor->GetStaticMeshComponent()->SetStaticMesh(UAssetManager::GetAssetByPath<UStaticMesh>("Sphere"));
+		Floor->GetStaticMeshComponent()->SetRelativeScale3D(FVector(10.0f, 10.0f, 1.0f));
+		Floor->GetStaticMeshComponent()->SetRelativeLocation(FVector(0.0f, 0.0f, -0.5f));
+	}
+
+	// 뷰어 전용 스카이박스 초기화 (Assets/SkySphere/SkeletalMeshViewer.hdr)
+	ViewerSkybox = MakeUnique<FSkyboxRenderer>();
+	if (!ViewerSkybox->Init("Assets/SkySphere/SkeletalMeshViewer.hdr"))
+	{
+		ViewerSkybox.reset();
+	}
+
+	// 뷰포트 카메라 셋업
 	Viewport.SetWorld(PreviewWorld);
 	Viewport.SetViewportType(ELevelViewportType::Perspective);
 	Viewport.Resize(1, 1);
@@ -149,6 +183,7 @@ bool FSkeletalMeshViewerPanel::Init()
 
 void FSkeletalMeshViewerPanel::Release()
 {
+	ViewerSkybox.reset();
 	Viewport.SetWorld(nullptr);
 	if (PreviewWorld)
 	{
@@ -159,6 +194,11 @@ void FSkeletalMeshViewerPanel::Release()
 	PreviewActor = nullptr;
 	MeshComponent = nullptr;
 	CurrentMesh = nullptr;
+}
+
+FSkyboxRenderer* FSkeletalMeshViewerPanel::GetSkybox() const
+{
+	return ViewerSkybox.get();
 }
 
 void FSkeletalMeshViewerPanel::Tick(float DeltaTime)

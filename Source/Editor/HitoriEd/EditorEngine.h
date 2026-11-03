@@ -131,7 +131,8 @@ private:
 
 	bool RenderScene(FSceneViewTargets& Targets, const FSceneView& SceneView,
 		FSceneRenderer& SceneRenderer, UWorld* TargetWorld, const FSceneRenderOptions& Options,
-		const std::function<void(FSceneOverlayCallbacks&)>& BuildOverlays);
+		const std::function<void(FSceneOverlayCallbacks&)>& BuildOverlays,
+		FSkyboxRenderer* SkyboxOverride = nullptr);
 	void RenderActorUUIDs(const FSceneView& View);
 
 	FWorldContext& GetEditorWorldContext();

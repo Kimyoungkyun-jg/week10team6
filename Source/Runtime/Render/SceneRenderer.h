@@ -41,6 +41,7 @@ struct FScenePassCallbacks // 기본 도형 다 그려진 후 그려져야 될 �
 	std::function<void()> CascadeVisualization;
 	std::function<bool()> FXAA;
 	FTexture2D* FXAAOutput = nullptr;
+	class FSkyboxRenderer* SkyboxOverride = nullptr;
 	FSceneOverlayCallbacks Overlays;
 };
 

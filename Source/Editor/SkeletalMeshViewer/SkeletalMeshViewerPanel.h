@@ -10,6 +10,7 @@ class USkeletalMeshComponent;
 class ASkeletalMeshActor;
 class FLineBatcher;
 class FGizmoRenderer;
+#include "Render/SkyboxRenderer.h"
 
 class FSkeletalMeshViewerPanel : public IEditorPanel
 {
@@ -24,6 +25,7 @@ public:
 	UWorld* GetWorld() const { return PreviewWorld; }
 	FEditorViewportClient& GetViewport() { return Viewport; }
 	FGizmo& GetGizmo() { return Gizmo; }
+	FSkyboxRenderer* GetSkybox() const;
 
 	// 뷰포트 오버레이(본 와이어프레임 & 기즈모) 렌더링
 	void DrawOverlay(FLineBatcher& Lines, FGizmoRenderer& GizmoRenderer, const FMatrix& ViewProjection);
@@ -78,6 +80,9 @@ private:
 	bool bInitialLayoutSet = false;
 	float InitialLeftTreeWidthRatio = 0.22f;
 	float InitialRightDetailWidthRatio = 0.25f;
+
+	// 뷰어 전용 스카이박스
+	TUniquePtr<FSkyboxRenderer> ViewerSkybox;
 
 	// 검색 시 표시 여부 캐시
 	TArray<uint8> BoneFilterVisible;

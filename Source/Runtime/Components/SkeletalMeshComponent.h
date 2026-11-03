@@ -20,6 +20,7 @@ public:
 	void InitBoneTransforms();
 	void SetBoneTransform(int32 BoneIndex, const FMatrix& LocalTransform);
 	const TArray<FMatrix>& GetBoneTransforms() const { return LocalBoneTransforms; }
+	const TArray<FMatrix>& GetGlobalBoneTransform() const { return GlobalBoneTransforms; }
 
 	void PerformCPUSkinning();
 	const TArray<FMatrix>& GetGlobalBoneTransforms() const { return GlobalBoneTransforms; }

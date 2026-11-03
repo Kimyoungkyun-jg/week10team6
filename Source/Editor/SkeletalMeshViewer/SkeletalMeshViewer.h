@@ -18,6 +18,9 @@ struct FSkeletalMeshViewer
 	FEditorViewportClient Client;
 	bool bOpen = true;
 	bool bVisible = false;
+
+	TArray<TArray<uint32>> Children;
+	int32 SelectedBone = -1;
 };
 
 class FSkeletalMeshViewerPanel : public IEditorPanel
@@ -33,6 +36,8 @@ public:
 
 private:
 	void DrawViewport(FSkeletalMeshViewer& Viewer);
+	void DrawBoneTree(FSkeletalMeshViewer& Viewer);
+	void DrawBoneNode(FSkeletalMeshViewer& Viewer, int32 BoneIndex);
 
 	TArray<TUniquePtr<FSkeletalMeshViewer>> Viewers;
 	uint32 NextId = 0;

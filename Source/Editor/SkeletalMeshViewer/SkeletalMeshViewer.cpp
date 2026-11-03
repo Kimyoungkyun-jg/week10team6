@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor/SkeletalMeshActor.h"
 #include "GameFramework/Actor/SkyLightActor.h"
+#include "Render/SkeletalMesh.h"
 
 FSkeletalMeshViewer::~FSkeletalMeshViewer()
 {
@@ -27,6 +28,12 @@ void FSkeletalMeshViewerPanel::OpenFBX(const FString& Path)
 	Viewer->World = UWorld::CreateWorld(EWorldType::Editor, false);
 	Viewer->MeshComponent = Viewer->World->SpawnActor<ASkeletalMeshActor>()->GetSkeletalMeshComponent();
 	Viewer->MeshComponent->SetSkeletalMesh(Mesh);
+
+	const TArray<FBoneInfo>& Bones = Mesh->MeshData.Bones;
+	Viewer->Children.SetNum(Bones.Num());
+	for (int32 i = 0; i < Bones.Num(); ++i)
+		if (Bones[i].ParentIndex >= 0)
+			Viewer->Children[Bones[i].ParentIndex].Add(i);
 
 	if (ASkyLightActor* SkyLight = Viewer->World->SpawnActor<ASkyLightActor>())
 		SkyLight->GetBillboardComponent()->SetVisibility(false);
@@ -61,7 +68,13 @@ void FSkeletalMeshViewerPanel::OnRender()
 		ImGui::SetNextWindowSize(ImVec2(800.0f, 600.0f), ImGuiCond_FirstUseEver);
 		Viewer->bVisible = ImGui::Begin(Title.c_str(), &Viewer->bOpen);
 		if (Viewer->bVisible)
+		{
+			ImGui::BeginChild("Bones", ImVec2(250.0f, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
+			DrawBoneTree(*Viewer);
+			ImGui::EndChild();
+			ImGui::SameLine();
 			DrawViewport(*Viewer);
+		}
 		ImGui::End();
 	}
 }
@@ -85,4 +98,40 @@ void FSkeletalMeshViewerPanel::DrawViewport(FSkeletalMeshViewer& Viewer)
 	// WASD/QE 이동
 	if (ImGui::IsItemHovered() || ImGui::IsItemActive())
 		Viewer.Client.TickInput(ImGui::GetIO().DeltaTime, ImGui::IsMouseDown(ImGuiMouseButton_Right), true, 0, 10.0f, 0.2f);
+}
+
+void FSkeletalMeshViewerPanel::DrawBoneTree(FSkeletalMeshViewer& Viewer)
+{
+	const TArray<FBoneInfo>& Bones = Viewer.MeshComponent->GetSkeletalMesh()->MeshData.Bones;
+	for (int32 i = 0; i < Bones.Num(); ++i)
+		if (Bones[i].ParentIndex < 0)
+			DrawBoneNode(Viewer, i); // Root부터 재귀로 내려간다
+}
+
+void FSkeletalMeshViewerPanel::DrawBoneNode(FSkeletalMeshViewer& Viewer, int32 BoneIndex)
+{
+	const FBoneInfo& Bone = Viewer.MeshComponent->GetSkeletalMesh()->MeshData.Bones[BoneIndex];
+	const bool bLeaf = Viewer.Children[BoneIndex].IsEmpty();
+
+	ImGuiTreeNodeFlags Flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth |
+		ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_DrawLinesToNodes;
+
+	if (BoneIndex == Viewer.SelectedBone)
+		Flags |= ImGuiTreeNodeFlags_Selected;
+
+	// 자식이 없으면 TreePush를 하지 않으므로 아래에서 TreePop도 안 한다
+	if (bLeaf)
+		Flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+
+	// Bone 이름이 겹칠 수 있으므로 ID는 Index로
+	const bool bOpen = ImGui::TreeNodeEx(reinterpret_cast<void*>(static_cast<intptr_t>(BoneIndex)), Flags, "%s", Bone.Name.c_str());
+	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
+		Viewer.SelectedBone = BoneIndex;
+
+	if (bOpen && !bLeaf)
+	{
+		for (int32 Child : Viewer.Children[BoneIndex])
+			DrawBoneNode(Viewer, Child);
+		ImGui::TreePop();
+	}
 }

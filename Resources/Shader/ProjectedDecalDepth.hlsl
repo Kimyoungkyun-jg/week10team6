@@ -28,7 +28,7 @@ VS_OUT mainVS(uint VertexID : SV_VertexID)
 }
 
 [earlydepthstencil]
-float4 mainPS(VS_OUT Input) : SV_Target0
+FDecalOutput mainPS(VS_OUT Input) : SV_Target0
 {
     return EvaluateDepthProjectedDecal(Input.Position);
 }

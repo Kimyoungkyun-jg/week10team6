@@ -13,7 +13,7 @@ cbuffer DecalDepthViewConstants : register(b5)
 
 Texture2D<float> SceneDepthTexture : register(t1);
 
-float4 EvaluateDepthProjectedDecal(float4 ScreenPosition)
+FDecalOutput EvaluateDepthProjectedDecal(float4 ScreenPosition)
 {
     int2 Pixel = int2(ScreenPosition.xy);
     
@@ -23,7 +23,7 @@ float4 EvaluateDepthProjectedDecal(float4 ScreenPosition)
     // 현재 엔진의 깊이 Clear 값은 1.
     // 배경은 데칼을 받지 않는다.
     if (Depth >= 1.0f)
-        return float4(0, 0, 0, 0);
+        return MakeEmptyDecalOutput();
     
     // SV_POSITION은 이미 픽셀 중심 좌표.
     // 여기서 0.5를 다시 더하지 않는다.
@@ -42,7 +42,7 @@ float4 EvaluateDepthProjectedDecal(float4 ScreenPosition)
         mul(ClipPosition, InverseViewProjection);
     
     if (abs(WorldPositionH.w) < 1.0e-8f)
-        return float4(0, 0, 0, 0);
+        return MakeEmptyDecalOutput();
     
     float3 WorldPosition = WorldPositionH.xyz / WorldPositionH.w;
     

@@ -294,7 +294,7 @@ void FSceneRenderer::UnbindForwardLighting(FRenderer* Renderer)
 
 void FSceneRenderer::UnbindForwardDecal(FRenderer* Renderer)
 {
-	RenderCommand::UnbindShaderResources(14, 1, EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
+	RenderCommand::UnbindShaderResources(14, 3, EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
 }
 
 bool FSceneRenderer::AddWorldNormalPass(FRenderGraphBuilder& Graph, FRenderer* Renderer,
@@ -608,14 +608,23 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					ETextureFormat::R8G8B8A8_UNorm
 				},
 				"DBufferUnlit");
+		const FRenderGraphTextureRef DBufferNormal =
+			Graph.CreateTexture(
+				{
+					Width,
+					Height,
+					ETextureFormat::R16G16B16A16_Float
+				},
+				"DBufferNormal");
 
-		if (!DBufferLit || !DBufferUnlit) return false;
+		if (!DBufferLit || !DBufferUnlit || !DBufferNormal) return false;
 		if (DecalStats.bCollecting)
 		{
 			DecalStats.Frame.bHasDBufferPasses = true;
 
 			DecalStats.Frame.DBufferBytes =
-				uint64(Width) * uint64(Height) * 4ull * 2ull; // 4채널 8비트 * 2장
+				uint64(Width) * uint64(Height) 
+				* (4ull + 4ull + 8ull); // 4채널 8비트 * 2장 + 4채널 16비트 * 1장
 		}
 
 		const bool bUseDecalReceiverStencil =
@@ -769,6 +778,13 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 							Output,
 							ERenderGraphLoadAction::Clear,
 							{ 0.0f, 0.0f, 0.0f, 0.0f }
+						},
+						{
+							DBufferNormal,
+							bUnlitPass
+								? ERenderGraphLoadAction::Load
+								: ERenderGraphLoadAction::Clear,
+							{ 0.0f, 0.0f, 0.0f, 0.0f }
 						}
 					};
 					if (bNeedsDBuffer)
@@ -881,7 +897,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 
 		FRenderGraphRasterPassDesc Forward{};
 		Forward.Name = "ForwardOpaque";
-		Forward.ReadTextures = { DBufferLit, DBufferUnlit };
+		Forward.ReadTextures = { DBufferLit, DBufferUnlit, DBufferNormal };
 		Forward.ReadTextureStartSlot = 14;
 		Forward.ColorAttachments = {
 			{ LightingHDR, ERenderGraphLoadAction::Load }

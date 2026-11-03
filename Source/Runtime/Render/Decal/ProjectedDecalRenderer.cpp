@@ -303,6 +303,10 @@ bool FProjectedDecalRenderer::OnRenderMesh(
 			Decal.ColorTexture,
 			EShaderBindFlagBits::Pixel);
 
+		RenderCommand::BindShaderResource(
+			2,
+			Decal.NormalTexture,
+			EShaderBindFlagBits::Pixel);
 
 		bool bSubmitted = false;
 		size_t Cursor = 0;
@@ -374,9 +378,10 @@ bool FProjectedDecalRenderer::OnRenderMesh(
 		nullptr,
 		EShaderBindFlagBits::Pixel);
 
+	// t0 Color, t1 SceneDepth, t2 Normal
 	RenderCommand::UnbindShaderResources(
 		0,
-		1,
+		3,
 		EShaderBindFlagBits::Pixel);
 
 	return true;
@@ -509,6 +514,11 @@ bool FProjectedDecalRenderer::OnRenderDepth(
 			Decal.ColorTexture,
 			EShaderBindFlagBits::Pixel);
 
+		RenderCommand::BindShaderResource(
+			2,
+			Decal.NormalTexture,
+			EShaderBindFlagBits::Pixel);
+
 		RenderCommand::BindSamplerState(
 			0,
 			Decal.Sampler,
@@ -615,11 +625,10 @@ bool FProjectedDecalRenderer::OnRenderDepth(
 		nullptr,
 		EShaderBindFlagBits::Pixel);
 
-	// t0: 데칼 텍스처
-	// t1: RenderGraph가 바인딩한 SceneDepth
+	// t0 Color, t1 SceneDepth, t2 Normal
 	RenderCommand::UnbindShaderResources(
 		0,
-		2,
+		3,
 		EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
 
 	return true;

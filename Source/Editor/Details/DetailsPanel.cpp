@@ -309,7 +309,12 @@ namespace
 
 			// 기존 함수는 텍스처 변경 시 공유 에셋을 복제해
 			// 컴포넌트 전용 머티리얼 인스턴스로 바꾼다.
+			ImGui::TextUnformatted("Base Color");
 			DrawTextureSlot(&Material, 0);
+
+			ImGui::TextUnformatted("Normal Map");
+			DrawTextureSlot(&Material, 1);
+
 			Decal->SetDecalMaterial(Material);
 
 			if (Material)

@@ -4,6 +4,7 @@
 #include "Render/SceneView.h"
 #include "Render/RenderResourceManager.h"
 #include "Render/Mesh.h"
+#include "Render/NormalMapUtils.h"
 #include "Engine/PrimitiveSceneProxy.h"
 #include "Core/EngineTimer.h"
 #include <algorithm>
@@ -13,13 +14,8 @@ namespace
 {
 	float GetNormalEncoding(UTexture2D* Texture)
 	{
-		if (!Texture || !Texture->GetResource() || !Texture->GetResource()->GetSRV()) return 0.0f;
-		switch (Texture->GetResource()->GetFormat())
-		{
-		case DXGI_FORMAT_BC5_UNORM: return 2.0f;
-		case DXGI_FORMAT_BC5_SNORM: return 3.0f;
-		default: return 1.0f;
-		}
+		return NormalMapUtils::GetEncoding(
+			Texture ? Texture->GetResource() : nullptr);
 	}
 
 	const FMatrix& PacketWorld(const FRenderPacket& Packet)

@@ -84,5 +84,11 @@ private:
 
 	UPROPERTY(EditAnywhere)
 	bool bUnlit = false;
+
+	UPROPERTY(EditAnywhere)
+	float NormalStrength = 1.0f;
+
+	UPROPERTY(EditAnywhere)
+	float NormalOpacity = 1.0f;
 };
 

@@ -445,6 +445,42 @@ namespace
             ProcessMaterials(Node->GetChild(i), Out);
         }
     }
+
+    // 정점을 공유해도 되는지 판단하는 키
+    // 컨트롤 포인트 (위치, 뼈 가중치) + 노멀 + UV
+    // float는 비트 그대로 비교 및 해싱. 같은 fbx 데이터에서 온 값이므로 공유할 꼭짓점은 비트까지 같아야함
+    struct FCornerKey
+    {
+        uint32 Bits[6] = {}; // ControlPointIndex, Normal.XYZ, UV.XY
+
+        bool operator==(const FCornerKey& Other) const
+        {
+            return std::memcmp(Bits, Other.Bits, sizeof(Bits)) == 0;
+        }
+    };
+
+    struct FCornerKeyHash
+    {
+        size_t operator()(const FCornerKey& Key) const
+        {
+            size_t Hash = 0;
+            for (uint32 Value : Key.Bits)
+                Hash ^= Value + 0x9e3779b9 + (Hash << 6) + (Hash >> 2); // boost::hash_combine과 같은 로직
+            return Hash;
+        }
+    };
+
+    FCornerKey MakeCornerKey(const FFbxCorner& Corner)
+    {
+        FCornerKey Key;
+        Key.Bits[0] = static_cast<uint32>(Corner.ControlPointIndex);
+        Key.Bits[1] = static_cast<uint32>(Corner.Normal.X);
+        Key.Bits[2] = static_cast<uint32>(Corner.Normal.Y);
+        Key.Bits[3] = static_cast<uint32>(Corner.Normal.Z);
+        Key.Bits[4] = static_cast<uint32>(Corner.UVs.X);
+        Key.Bits[5] = static_cast<uint32>(Corner.UVs.Y);
+        return Key;
+    }
 }
 
 bool FFbxImporter::ParseFbx(const FString& Path, FFbxInfo& Out)
@@ -550,6 +586,10 @@ bool FFbxImporter::Cook(const FFbxInfo& Raw, FSkeletalMeshData& Out)
 {
     Out.Bones = Raw.Bones;
 
+    // 같은 꼭짓점은 정점 하나를 공유
+    TMap<FCornerKey, uint32, FCornerKeyHash> CornerToVertex;
+    CornerToVertex.Reserve(Raw.Polygons.Num() * 3);
+
     int32 MaterialCount = Raw.MaterialInfos.Num();
     if (MaterialCount == 0)
     {
@@ -594,6 +634,14 @@ bool FFbxImporter::Cook(const FFbxInfo& Raw, FSkeletalMeshData& Out)
             {
                 int corner = CornerOrder[i];
                 const FFbxCorner& Corner = Poly.Corners[corner];
+                const FCornerKey Key = MakeCornerKey(Corner);
+
+                if (const uint32* Existing = CornerToVertex.Find(Key))
+                {
+                    Out.Indices.Add(*Existing);
+                    continue;
+                }
+
                 int32 cpIdx = Corner.ControlPointIndex;
 
                 FSkeletalVertex SkinnedVertex;
@@ -630,6 +678,8 @@ bool FFbxImporter::Cook(const FFbxInfo& Raw, FSkeletalMeshData& Out)
                 uint32 NewVertexIndex = static_cast<uint32>(Out.SkinnedVertices.Num());
                 Out.SkinnedVertices.Add(SkinnedVertex);
                 Out.Indices.Add(NewVertexIndex);
+                
+                CornerToVertex.Add(Key, NewVertexIndex);
             }
         }
 

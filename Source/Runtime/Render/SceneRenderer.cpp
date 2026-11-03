@@ -513,12 +513,47 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			if (!Processor.Build(View, RenderData.RenderQueue, &RenderData,
 				EMeshPassType::Forward, ForwardBatches, Options.LightingModel)) return false;
 		}
+		
+		// Receiver Decal 수집
+		DecalReceiverBatches.Reset();
+		DecalReceiverBatches.Reserve(ForwardBatches.Num());
+
+		for (const FMeshDrawBatch& SourceBatch : ForwardBatches)
+		{
+			bool bHasReceiver = false;
+
+			for (const FMeshDrawBatch::FItem& Item : SourceBatch.Items)
+			{
+				if (Item.bReceiveDecal)
+				{
+					bHasReceiver = true;
+					break;
+				}
+			}
+
+			if (!bHasReceiver)
+				continue;
+
+			FMeshDrawBatch ReceiverBatch = SourceBatch;
+
+			ReceiverBatch.Items.Reset();
+			ReceiverBatch.Items.Reserve(SourceBatch.Items.Num());
+
+			for (const FMeshDrawBatch::FItem& Item : SourceBatch.Items)
+			{
+				if (Item.bReceiveDecal)
+				{
+					ReceiverBatch.Items.Add(Item);
+				}
+			}
+			DecalReceiverBatches.Add(ReceiverBatch);
+		}
 
 		// 데칼 패스 확인
 		FDecalStats& DecalStats = RenderData.DecalStats;
 		if (DecalStats.bCollecting)
 		{
-			for (const FMeshDrawBatch& Batch : ForwardBatches)
+			for (const FMeshDrawBatch& Batch : DecalReceiverBatches)
 			{
 				if (Batch.Items.IsEmpty())
 					continue;
@@ -540,7 +575,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 		const bool bNeedsDBuffer =
 			Options.bDrawPrimitives &&
 			!View.bIsWireframe &&
-			!ForwardBatches.IsEmpty() &&
+			!DecalReceiverBatches.IsEmpty() &&
 			!VisibleDecals.IsEmpty();
 
 		if (bNeedsDBuffer &&
@@ -761,7 +796,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 							{
 								bCorePassSucceeded =
 									DecalRenderer->OnRenderMesh(
-										ForwardBatches,
+										DecalReceiverBatches,
 										VisibleDecals,
 										bUnlitPass,
 										Counters);
@@ -1182,7 +1217,8 @@ void FSceneRenderer::GatherRenderPackets(FScene& Scene, FSceneRenderData& Data,
 					{
 						// 칸 VisibleIndex는 이 반복만 쓴다 → 스레드끼리 겹치지 않음
 						const FPerObjectConstants Constants =
-							MakePerObjectConstants(Proxy->GetLocalToWorld(), Proxy->bReceiveShadow);
+							MakePerObjectConstants(Proxy->GetLocalToWorld(), 
+								Proxy->bReceiveShadow, Proxy->bReceiveDecal);
 
 						Data.ObjectConstants[VisibleIndex] = Constants;
 
@@ -1264,7 +1300,11 @@ void FSceneRenderer::GatherRenderPackets(FScene& Scene, FSceneRenderData& Data,
 					if (!bPrepareObjectSlots || NextExtraSlot >= MaxSlots) break;
 					FRenderPacket& Packet = RenderQueue[p];
 					const FMatrix& Model = Packet.Proxy ? Packet.Proxy->GetLocalToWorld() : Packet.Model ? *Packet.Model : FMatrix::Identity;
-					Data.ObjectConstants[NextExtraSlot] = MakePerObjectConstants(Model);
+					Data.ObjectConstants[NextExtraSlot] = 
+						MakePerObjectConstants(
+							Model, 
+							!Packet.Proxy || Packet.Proxy->bReceiveShadow, 
+							!Packet.Proxy || Packet.Proxy->bReceiveDecal);
 					Packet.Slot = NextExtraSlot++;
 				}
 			}

@@ -145,6 +145,7 @@ private:
 	bool bLightUploadSucceeded = false;
 	bool bTilesBuilt = false;
 	TArray<FMeshDrawBatch> ForwardBatches;
+	TArray<FMeshDrawBatch> DecalReceiverBatches;
 	FViewContext CachedViewContext;
 	bool bCorePassSucceeded = true;
 	bool bFXAAPassSucceeded = true;

@@ -47,12 +47,13 @@
 
 namespace
 {
-	inline void WritePerObjectConstants(uint8* Dest, const FMatrix& LocalToWorld, const FMatrix& WorldToLocal, bool bReceiveShadow)
+	inline void WritePerObjectConstants(uint8* Dest, const FMatrix& LocalToWorld, const FMatrix& WorldToLocal, bool bReceiveShadow, bool bReceiveDecal)
 	{
 		FPerObjectConstants Constants{};
 		Constants.World = LocalToWorld;
 		Constants.NormalMatrix = WorldToLocal.GetTransposed();
 		Constants.ShadowFlags.X = bReceiveShadow ? 1.0f : 0.0f;   // GBuffer가 NormalRoughness.w 부호로 넘긴다
+		Constants.ShadowFlags.Y = bReceiveDecal ? 1.0f : 0.0f;
 		std::memcpy(Dest, &Constants, sizeof(Constants));
 	}
 }
@@ -381,7 +382,7 @@ void UWorld::GatherRenderPackets(FRenderQueue& RenderQueue, const FViewContext* 
 					{
 						// 칸 VisibleIndex는 이 반복만 쓴다 → 스레드끼리 겹치지 않음
 						WritePerObjectConstants(SlotDest + size_t(VisibleIndex) * ObjectSlotBytes,
-							Proxy->GetLocalToWorld(), Proxy->GetWorldToLocal(), Proxy->bReceiveShadow);
+							Proxy->GetLocalToWorld(), Proxy->GetWorldToLocal(), Proxy->bReceiveShadow, Proxy->bReceiveDecal);
 						Slot = VisibleIndex;
 					}
 
@@ -453,7 +454,7 @@ void UWorld::GatherRenderPackets(FRenderQueue& RenderQueue, const FViewContext* 
 					FRenderPacket& Packet = RenderQueue[p];
 					const FMatrix& Model = Packet.Proxy ? Packet.Proxy->GetLocalToWorld() : Packet.Model ? *Packet.Model : FMatrix::Identity;
 					const FMatrix WorldToLocal = Packet.Proxy ? Packet.Proxy->GetWorldToLocal() : Model.Inverse();
-					WritePerObjectConstants(SlotDest + size_t(NextExtraSlot) * ObjectSlotBytes, Model, WorldToLocal, !Packet.Proxy || Packet.Proxy->bReceiveShadow);
+					WritePerObjectConstants(SlotDest + size_t(NextExtraSlot) * ObjectSlotBytes, Model, WorldToLocal, !Packet.Proxy || Packet.Proxy->bReceiveShadow, !Packet.Proxy || Packet.Proxy->bReceiveDecal);
 					Packet.Slot = NextExtraSlot++;
 				}
 			}

@@ -449,10 +449,15 @@ FUberOutput Uber_PS(VS_OUT Input)
     
     int3 PixelCoord = int3(int2(Input.Position.xy), 0);
     
-    float4 LitDecal = DBufferLit.Load(PixelCoord);
+    bool bReceiveDecal = ShadowFlags.y > 0.5f;
     
-    Albedo = Albedo * (1.0f - LitDecal.a) + LitDecal.rgb;
-    
+    if (bReceiveDecal)
+    {
+        float4 LitDecal = DBufferLit.Load(PixelCoord);
+        
+        Albedo = Albedo * (1.0f - LitDecal.a) + LitDecal.rgb;
+    }
+      
     float3 Diffuse;
     float3 Specular = 0.0f;
 
@@ -474,7 +479,10 @@ FUberOutput Uber_PS(VS_OUT Input)
     float3 FinalColor = Albedo * Diffuse + Specular + Emissive.rgb;
     float4 UnlitDecal = DBufferUnlit.Load(PixelCoord);
 
-    FinalColor = FinalColor * (1.0f - UnlitDecal.a) + UnlitDecal.rgb;
+    if (bReceiveDecal)
+    {
+        FinalColor = FinalColor * (1.0f - UnlitDecal.a) + UnlitDecal.rgb;
+    }
 
     Output.LitColor = float4(FinalColor, SurfaceColor.a * BaseColor.a);
     Output.NormalRoughness = float4(ShadingNormal, 0.8f);

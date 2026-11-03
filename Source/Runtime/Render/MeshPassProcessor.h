@@ -35,6 +35,7 @@ struct FMeshDrawBatch
 		uint32 IndexCount = 0;
 		const void* ObjectKey = nullptr;
 		bool bOccludedByGpu = false;
+		bool bReceiveDecal = true;
 	};
 
 	FPipelineState Pipeline;

@@ -6,6 +6,7 @@
 #include "GameFramework/Actor/SkeletalMeshActor.h"
 #include "GameFramework/Actor/SkyLightActor.h"
 #include "Render/SkeletalMesh.h"
+#include "Collision/Ray.h"
 #include "UObject/UObjectGlobals.h"
 
 FSkeletalMeshViewer::~FSkeletalMeshViewer()
@@ -117,6 +118,8 @@ void FSkeletalMeshViewerPanel::DrawViewport(FSkeletalMeshViewer& Viewer)
 
 	if (FTexture2D* Color = Viewer.Client.GetColorTarget())
 		ImGui::GetWindowDrawList()->AddImage(Color->GetSRV(), Min, ImVec2(Min.x + Size.x, Min.y + Size.y));
+
+	DrawSkeleton(Viewer, Min, Size);
 	
 	const bool bLeftDown = ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
 	UpdateBoneGizmo(Viewer, Min, bLeftDown);
@@ -164,6 +167,48 @@ void FSkeletalMeshViewerPanel::DrawBoneNode(FSkeletalMeshViewer& Viewer, int32 B
 			DrawBoneNode(Viewer, Child);
 		ImGui::TreePop();
 	}
+}
+
+void FSkeletalMeshViewerPanel::DrawSkeleton(FSkeletalMeshViewer& Viewer, const ImVec2& ViewMin, const ImVec2& ViewSize)
+{
+	const TArray<FBoneInfo>& Bones = Viewer.MeshComponent->GetSkeletalMesh()->MeshData.Bones;
+	const TArray<FMatrix>& Globals = Viewer.MeshComponent->GetGlobalBoneTransforms();
+	if (Globals.Num() != Bones.Num())
+		return;
+
+	const FMatrix ComponentWorld = Viewer.MeshComponent->GetWorldMatrix();
+	const FMatrix ViewProj = Viewer.Client.GetViewProjectionMatrix();
+
+	TArray<FVector2> Joints;
+	Joints.SetNum(Bones.Num());
+	for (int32 i = 0; i < Bones.Num(); ++i)
+	{
+		const FVector Location = (Globals[i] * ComponentWorld).TransformPosition(FVector::ZeroVector);
+		Joints[i] = WorldToScreen(Location, ViewProj, static_cast<int>(ViewSize.x), static_cast<int>(ViewSize.y));
+	}
+
+	const auto IsBehind = [&](int32 i) { return Joints[i].X == -FLT_MAX;};
+	const auto ToScreen = [&](int32 i) { return ImVec2(ViewMin.x + Joints[i].X, ViewMin.y + Joints[i].Y); };
+	
+	ImDrawList* DL = ImGui::GetWindowDrawList();
+	DL->PushClipRect(ViewMin, ImVec2(ViewMin.x + ViewSize.x, ViewMin.y + ViewSize.y), true);
+	for (int32 i = 0; i < Bones.Num(); ++i)
+	{
+		if (IsBehind(i))
+			continue;
+
+		const int32 Parent = Bones[i].ParentIndex;
+		if (Parent >= 0 && !IsBehind(Parent))
+			DL->AddLine(ToScreen(Parent), ToScreen(i), IM_COL32(220, 220, 220, 180), 1.5f);
+
+		const bool bSelected = (i == Viewer.SelectedBone);
+		DL->AddCircleFilled(
+			ToScreen(i),
+			bSelected ? 5.0f : 3.0f,
+			bSelected ? IM_COL32(255, 170, 40, 255) : IM_COL32(100, 190, 255, 255)
+		);
+	}
+	DL->PopClipRect();
 }
 
 void FSkeletalMeshViewerPanel::UpdateBoneGizmo(FSkeletalMeshViewer& Viewer, const ImVec2& ViewMin, bool bLeftDown)

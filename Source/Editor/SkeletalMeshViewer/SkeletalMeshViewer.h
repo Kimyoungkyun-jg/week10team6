@@ -45,6 +45,7 @@ private:
 	void DrawViewport(FSkeletalMeshViewer& Viewer);
 	void DrawBoneTree(FSkeletalMeshViewer& Viewer);
 	void DrawBoneNode(FSkeletalMeshViewer& Viewer, int32 BoneIndex);
+	void DrawSkeleton(FSkeletalMeshViewer& Viewer, const ImVec2& ViewMin, const ImVec2& ViewSize);
 	void UpdateBoneGizmo(FSkeletalMeshViewer& Viewer, const ImVec2& ViewMin, bool bLeftDown);
 
 	TArray<TUniquePtr<FSkeletalMeshViewer>> Viewers;

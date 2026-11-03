@@ -14,6 +14,15 @@ FSkeletalMeshViewer::~FSkeletalMeshViewer()
 		GEngine->DestroyWorld(World);
 }
 
+void FSkeletalMeshViewerPanel::Tick(float DeltaTime)
+{
+	for (TUniquePtr<FSkeletalMeshViewer>& Viewer : Viewers)
+	{
+		if (Viewer->ViewSize.x >= 1.0f && Viewer->ViewSize.y >= 1.0f)
+			Viewer->Client.Resize(static_cast<uint32>(Viewer->ViewSize.x), static_cast<uint32>(Viewer->ViewSize.y));
+	}
+}
+
 void FSkeletalMeshViewerPanel::OpenFBX(const FString& Path)
 {
 	USkeletalMesh* Mesh = UAssetManager::LoadFbxSkeletalMesh(Path);
@@ -85,8 +94,9 @@ void FSkeletalMeshViewerPanel::DrawViewport(FSkeletalMeshViewer& Viewer)
 	if (Size.x < 1.0f || Size.y < 1.0f)
 		return;
 
-	// 이전 SRV가 들어가지 않도록 AddImage 전에 Resize
-	Viewer.Client.Resize(static_cast<uint32>(Size.x), static_cast<uint32>(Size.y));
+	// 이전 SRV가 들어가지 않도록 AddImage 전에 조정
+	// 실제 Resize는 다음 프레임 Tick에서.
+	Viewer.ViewSize = Size;
 
 	const ImVec2 Min = ImGui::GetCursorScreenPos();
 	ImGui::InvisibleButton("##Viewport", Size, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);

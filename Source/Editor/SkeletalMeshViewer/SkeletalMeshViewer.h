@@ -21,13 +21,15 @@ struct FSkeletalMeshViewer
 
 	TArray<TArray<uint32>> Children;
 	int32 SelectedBone = -1;
+
+	ImVec2 ViewSize{ 0.0f, 0.0f };
 };
 
 class FSkeletalMeshViewerPanel : public IEditorPanel
 {
 public:
 	bool Init() override { return true; }
-	void Tick(float DeltaTime) override {}
+	void Tick(float DeltaTime) override;
 	void OnRender() override;
 	const char* GetPanelName() const override { return "Skeletal Mesh Viewer"; }
 	void OpenFBX(const FString& Path);

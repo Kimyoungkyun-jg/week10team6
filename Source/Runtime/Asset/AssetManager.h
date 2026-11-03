@@ -4,6 +4,7 @@
 #include "UObject/Property.h"
 #include "Render/Renderer.h"
 #include "Asset/LOD/StaticMeshLODGenerator.h"
+#include "Asset/FbxImporter/AnimationData.h"
 
 #include <filesystem>
 #include <functional>
@@ -69,6 +70,8 @@ public:
 	USoundWave* LoadSound(const FString& Path);
 	static UStaticMesh* LoadObjStaticMesh(const FString& Path);
 	static USkeletalMesh* LoadFbxSkeletalMesh(const FString& Path);
+	static const TArray<FAnimationClip>* LoadFbxAnimations(const FString& Path);
+	static const TArray<FAnimationClip>* GetFbxAnimations(const FString& AssetKey);
 
 	FLODGenerateResult GenerateStaticMeshLODs(UStaticMesh& Mesh,const FLODGenerateRequest& Request);
 
@@ -83,6 +86,7 @@ private:
 	TMap<FString, FString> AssetPathMap;
 	TMap<FString, URenderAsset*> AssetMap;
 	TMap<FString, USoundWave*> SoundMap;
+	TMap<FString, TArray<FAnimationClip>> AnimationMap;
 
 	//TMap<FString, UStaticMesh*> MeshMap;	// KEY: FILE NAME OR 쉐입 첫글자 대문자
 	TMap<FString, TUniquePtr<FShader>> ShaderMap;	// KEY: FILE NAME

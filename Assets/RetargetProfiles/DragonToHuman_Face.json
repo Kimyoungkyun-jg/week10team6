@@ -1,0 +1,288 @@
+{
+  "Pairs": [
+    {
+      "AimChild": "",
+      "Source": "root",
+      "Target": "root"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001",
+      "Target": "Bip001"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-Pelvis",
+      "Target": "Bip001-Pelvis"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-Spine",
+      "Target": "Bip001-Spine"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-Spine1",
+      "Target": "Bip001-Spine1"
+    },
+    {
+      "AimChild": "Bip001-Neck",
+      "Source": "Bip001-Spine2",
+      "Target": "Bip001-Spine2"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Clavicle",
+      "Target": "Bip001-L-Clavicle"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-UpperArm",
+      "Target": "Bip001-L-UpperArm"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Forearm",
+      "Target": "Bip001-L-Forearm"
+    },
+    {
+      "AimChild": "Bip001-L-Finger2",
+      "Source": "Bip001-L-Hand",
+      "Target": "Bip001-L-Hand"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Finger0",
+      "Target": "Bip001-L-Finger0"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Finger01",
+      "Target": "Bip001-L-Finger01"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Finger1",
+      "Target": "Bip001-L-Finger1"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Finger11",
+      "Target": "Bip001-L-Finger11"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Finger12",
+      "Target": "Bip001-L-Finger12"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Finger2",
+      "Target": "Bip001-L-Finger2"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Finger21",
+      "Target": "Bip001-L-Finger21"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Finger22",
+      "Target": "Bip001-L-Finger22"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Finger3",
+      "Target": "Bip001-L-Finger3"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Finger31",
+      "Target": "Bip001-L-Finger31"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Finger32",
+      "Target": "Bip001-L-Finger32"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Clavicle",
+      "Target": "Bip001-R-Clavicle"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-UpperArm",
+      "Target": "Bip001-R-UpperArm"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Forearm",
+      "Target": "Bip001-R-Forearm"
+    },
+    {
+      "AimChild": "Bip001-R-Finger2",
+      "Source": "Bip001-R-Hand",
+      "Target": "Bip001-R-Hand"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Finger0",
+      "Target": "Bip001-R-Finger0"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Finger01",
+      "Target": "Bip001-R-Finger01"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Finger1",
+      "Target": "Bip001-R-Finger1"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Finger11",
+      "Target": "Bip001-R-Finger11"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Finger12",
+      "Target": "Bip001-R-Finger12"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Finger2",
+      "Target": "Bip001-R-Finger2"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Finger21",
+      "Target": "Bip001-R-Finger21"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Finger22",
+      "Target": "Bip001-R-Finger22"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Finger3",
+      "Target": "Bip001-R-Finger3"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Finger31",
+      "Target": "Bip001-R-Finger31"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Finger32",
+      "Target": "Bip001-R-Finger32"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-Neck",
+      "Target": "Bip001-Neck"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-Head",
+      "Target": "Bip001-Head"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Thigh",
+      "Target": "Bip001-L-Thigh"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Calf",
+      "Target": "Bip001-L-Calf"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Foot",
+      "Target": "Bip001-L-Foot"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-L-Toe0",
+      "Target": "Bip001-L-Toe0"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Thigh",
+      "Target": "Bip001-R-Thigh"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Calf",
+      "Target": "Bip001-R-Calf"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Foot",
+      "Target": "Bip001-R-Foot"
+    },
+    {
+      "AimChild": "",
+      "Source": "Bip001-R-Toe0",
+      "Target": "Bip001-R-Toe0"
+    },
+    {
+      "AimChild": "",
+      "Source": "Tail_01",
+      "Target": "Bn_m_tail_001"
+    },
+    {
+      "AimChild": "",
+      "Source": "Tail_02",
+      "Target": "Bn_m_tail_002"
+    },
+    {
+      "AimChild": "",
+      "Source": "Tail_03",
+      "Target": "Bn_m_tail_003"
+    },
+    {
+      "AimChild": "",
+      "Source": "Tail_04",
+      "Target": "Bn_m_tail_004"
+    },
+    {
+      "AimChild": "",
+      "Source": "Tail_05",
+      "Target": "Bn_m_tail_005"
+    },
+    {
+      "AimChild": "",
+      "Source": "Tail_06",
+      "Target": "Bn_m_tail_006"
+    },
+    {
+      "AimChild": "",
+      "Source": "Tail_07",
+      "Target": "Bn_m_tail_007"
+    },
+    {
+      "AimChild": "",
+      "Source": "Tail_08",
+      "Target": "Bn_m_tail_008"
+    },
+    {
+      "AimChild": "Bon_Lolip_M",
+      "Source": "Jaw",
+      "Target": "mouth"
+    },
+    {
+      "AimChild": "",
+      "Source": "Jaw_Beard_01",
+      "Target": "Bon_Lolip_M"
+    }
+  ],
+  "SourceFBX": "Models/Dragon/Dragon.FBX",
+  "SourceYaw": 0,
+  "TargetFBX": "Models/Mint/Mint.fbx",
+  "Version": 1
+}

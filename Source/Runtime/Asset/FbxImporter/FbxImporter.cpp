@@ -7,6 +7,7 @@
 #include "Math/Box.h"
 #include "SkeletalMeshBake.h"
 #include <filesystem>
+#include <cmath>
 
 using namespace fbxsdk;
 
@@ -445,6 +446,25 @@ namespace
             ProcessMaterials(Node->GetChild(i), Out);
         }
     }
+
+    void CollectAnimationBones(fbxsdk::FbxNode* Node, int32 ParentIndex,
+        TArray<fbxsdk::FbxNode*>& Nodes, TArray<FString>& Names, TArray<int32>& Parents)
+    {
+        int32 CurrentParent = ParentIndex;
+        if (fbxsdk::FbxNodeAttribute* Attribute = Node->GetNodeAttribute())
+        {
+            const auto Type = Attribute->GetAttributeType();
+            if (Type == fbxsdk::FbxNodeAttribute::eSkeleton || Type == fbxsdk::FbxNodeAttribute::eNull)
+            {
+                CurrentParent = Nodes.Num();
+                Nodes.Add(Node);
+                Names.Add(Node->GetName());
+                Parents.Add(ParentIndex);
+            }
+        }
+        for (int Child = 0; Child < Node->GetChildCount(); ++Child)
+            CollectAnimationBones(Node->GetChild(Child), CurrentParent, Nodes, Names, Parents);
+    }
 }
 
 bool FFbxImporter::ParseFbx(const FString& Path, FFbxInfo& Out)
@@ -514,6 +534,119 @@ bool FFbxImporter::ParseFbx(const FString& Path, FFbxInfo& Out)
     ProcessMesh(RootNode, Out);
 
     Manager->Destroy();
+    return true;
+}
+
+bool FFbxImporter::LoadAnimationClips(const FString& Path, TArray<FAnimationClip>& OutClips)
+{
+    OutClips.Reset();
+    const FString BinPath = Path + ".anim.bin";
+    std::error_code FileError;
+    const auto SourceTime = std::filesystem::last_write_time(Path, FileError);
+    if (FileError) return false;
+    FileError.clear();
+    const auto CacheTime = std::filesystem::last_write_time(BinPath, FileError);
+    if (!FileError && CacheTime >= SourceTime && FSkeletalMeshBake::ReadAnimations(BinPath, OutClips))
+        return true;
+
+    fbxsdk::FbxManager* Manager = fbxsdk::FbxManager::Create();
+    if (!Manager) return false;
+    fbxsdk::FbxIOSettings* IOSettings = fbxsdk::FbxIOSettings::Create(Manager, IOSROOT);
+    Manager->SetIOSettings(IOSettings);
+    fbxsdk::FbxImporter* Importer = fbxsdk::FbxImporter::Create(Manager, "");
+    if (!Importer->Initialize(Path.c_str(), -1, IOSettings))
+    {
+        Manager->Destroy();
+        return false;
+    }
+    fbxsdk::FbxScene* Scene = fbxsdk::FbxScene::Create(Manager, "AnimationScene");
+    const bool bImported = Importer->Import(Scene);
+    Importer->Destroy();
+    if (!bImported)
+    {
+        Manager->Destroy();
+        return false;
+    }
+
+    if (Scene->GetGlobalSettings().GetSystemUnit() != fbxsdk::FbxSystemUnit::m)
+        fbxsdk::FbxSystemUnit::m.ConvertScene(Scene);
+    const fbxsdk::FbxAxisSystem EngineAxisSystem(
+        fbxsdk::FbxAxisSystem::eZAxis,
+        fbxsdk::FbxAxisSystem::eParityEven,
+        fbxsdk::FbxAxisSystem::eLeftHanded);
+    if (Scene->GetGlobalSettings().GetAxisSystem() != EngineAxisSystem)
+        EngineAxisSystem.ConvertScene(Scene);
+
+    TArray<fbxsdk::FbxNode*> BoneNodes;
+    TArray<FString> BoneNames;
+    TArray<int32> ParentIndices;
+    if (fbxsdk::FbxNode* Root = Scene->GetRootNode())
+        for (int Child = 0; Child < Root->GetChildCount(); ++Child)
+            CollectAnimationBones(Root->GetChild(Child), -1, BoneNodes, BoneNames, ParentIndices);
+    if (BoneNodes.IsEmpty() || BoneNodes.Num() > 4096)
+    {
+        Manager->Destroy();
+        return false;
+    }
+    FString SkeletonName = BoneNames[0];
+    for (fbxsdk::FbxNode* BoneNode : BoneNodes)
+        if (BoneNode->GetNodeAttribute() &&
+            BoneNode->GetNodeAttribute()->GetAttributeType() == fbxsdk::FbxNodeAttribute::eSkeleton)
+        {
+            SkeletonName = BoneNode->GetName();
+            break;
+        }
+
+    TArray<FAnimationClip> Clips;
+    const int StackCount = Scene->GetSrcObjectCount<fbxsdk::FbxAnimStack>();
+    if (StackCount > 256)
+    {
+        Manager->Destroy();
+        return false;
+    }
+    for (int StackIndex = 0; StackIndex < StackCount; ++StackIndex)
+    {
+        fbxsdk::FbxAnimStack* Stack = Scene->GetSrcObject<fbxsdk::FbxAnimStack>(StackIndex);
+        if (!Stack) continue;
+        fbxsdk::FbxTimeSpan Span = Stack->GetLocalTimeSpan();
+
+        if (Span.GetDuration().GetSecondDouble() <= 0.0)
+            Scene->GetGlobalSettings().GetTimelineDefaultTimeSpan(Span);
+
+        const double Start = Span.GetStart().GetSecondDouble();
+        const double Duration = Span.GetStop().GetSecondDouble() - Start;
+        if (!std::isfinite(Start) || !std::isfinite(Duration) || Duration <= 0.0) continue;
+        const double FrameCountDouble = std::ceil(Duration * 30.0) + 1.0;
+        if (FrameCountDouble > 100000.0 || FrameCountDouble * BoneNodes.Num() > 50000000.0)
+        {
+            Manager->Destroy();
+            return false;
+        }
+
+        Scene->SetCurrentAnimationStack(Stack); // 지금 부터 애니메이션 실행 위치 계산
+        FAnimationClip Clip;
+        Clip.Name = Stack->GetName();
+        Clip.SkeletonName = SkeletonName;
+        Clip.DurationSeconds = static_cast<float>(Duration);
+        Clip.BoneNames = BoneNames;
+        Clip.ParentIndices = ParentIndices;
+        const int32 FrameCount = static_cast<int32>(FrameCountDouble);
+        Clip.Frames.Reserve(FrameCount);
+        for (int32 FrameIndex = 0; FrameIndex < FrameCount; ++FrameIndex)
+        {
+            fbxsdk::FbxTime Time;
+            Time.SetSecondDouble(Start + std::min(FrameIndex / 30.0, Duration));
+            FAnimationFrame Frame;
+            Frame.Bones.SetNum(BoneNodes.Num());
+            for (int32 BoneIndex = 0; BoneIndex < BoneNodes.Num(); ++BoneIndex)
+                Frame.Bones[BoneIndex] = ConvertFbxMatrix(BoneNodes[BoneIndex]->EvaluateGlobalTransform(Time)); // 위에 선택했던 Stack 에서 time 일 때 각 본의 전역 행렬 반환
+            Clip.Frames.Add(std::move(Frame));
+        }
+        Clips.Add(std::move(Clip));
+    }
+    Manager->Destroy();
+    if (!FSkeletalMeshBake::WriteAnimations(BinPath, Clips)) return false;
+    OutClips = std::move(Clips);
     return true;
 }
 

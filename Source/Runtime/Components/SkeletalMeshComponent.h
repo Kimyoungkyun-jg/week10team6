@@ -19,6 +19,7 @@ public:
 
 	void InitBoneTransforms();
 	void SetBoneTransform(int32 BoneIndex, const FMatrix& LocalTransform);
+	void SetGlobalBoneTransforms(const TArray<FMatrix>& InGlobalTransforms);
 	const TArray<FMatrix>& GetBoneTransforms() const { return LocalBoneTransforms; }
 
 	void PerformCPUSkinning();
@@ -37,4 +38,5 @@ private:
 	TUniquePtr<FVertexBuffer> SkinnedVertexBuffer;
 	FBox SkinnedBounds;
 	bool bSkinningMatricesDirty = true;
+	bool bGlobalBoneTransformsOverridden = false;
 };

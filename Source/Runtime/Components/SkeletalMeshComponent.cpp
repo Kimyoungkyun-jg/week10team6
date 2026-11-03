@@ -39,6 +39,7 @@ void USkeletalMeshComponent::InitBoneTransforms()
 	SkinningMatrices.Reset();
 	SkinnedVertices.Reset();
 	bSkinningMatricesDirty = false;
+	bGlobalBoneTransformsOverridden = false;
 	if (!SkeletalMesh) return;
 
 	const TArray<FBoneInfo>& Bones = SkeletalMesh->MeshData.Bones;
@@ -70,7 +71,26 @@ void USkeletalMeshComponent::SetBoneTransform(int32 BoneIndex, const FMatrix& Lo
 		return;
 	}
 
+	if (bGlobalBoneTransformsOverridden)
+	{
+		const TArray<FBoneInfo>& Bones = SkeletalMesh->MeshData.Bones;
+		for (int32 Index = 0; Index < Bones.Num(); ++Index)
+		{
+			const int32 Parent = Bones[Index].ParentIndex;
+			LocalBoneTransforms[Index] = Parent < 0 ? GlobalBoneTransforms[Index] :
+				GlobalBoneTransforms[Index] * GlobalBoneTransforms[Parent].Inverse();
+		}
+		bGlobalBoneTransformsOverridden = false;
+	}
 	LocalBoneTransforms[BoneIndex] = LocalTransform;
+	bSkinningMatricesDirty = true;
+}
+
+void USkeletalMeshComponent::SetGlobalBoneTransforms(const TArray<FMatrix>& InGlobalTransforms)
+{
+	if (!SkeletalMesh || InGlobalTransforms.Num() != GlobalBoneTransforms.Num()) return;
+	GlobalBoneTransforms = InGlobalTransforms;
+	bGlobalBoneTransformsOverridden = true;
 	bSkinningMatricesDirty = true;
 }
 
@@ -84,17 +104,19 @@ void USkeletalMeshComponent::PerformCPUSkinning()
 
 	for (int32 i = 0; i < BoneCount; ++i)
 	{
-		int32 ParentIndex = Bones[i].ParentIndex;
-		if (ParentIndex == -1)
+		if (!bGlobalBoneTransformsOverridden)
 		{	
-			// 루트 본의 경우, 로컬 변환을 그대로 글로벌 변환으로 사용
-			GlobalBoneTransforms[i] = LocalBoneTransforms[i];
-
-		}
-		else
-		{
-			// 부모 본의 글로벌 변환과 로컬 변환을 곱하여 글로벌 변환 계산
-			GlobalBoneTransforms[i] = LocalBoneTransforms[i] * GlobalBoneTransforms[ParentIndex];
+			int32 ParentIndex = Bones[i].ParentIndex;
+			if (ParentIndex == -1)
+			{
+				// 루트 본의 경우, 로컬 변환을 그대로 글로벌 변환으로 사용
+				GlobalBoneTransforms[i] = LocalBoneTransforms[i];
+			}
+			else
+			{
+				// 부모 본의 글로벌 변환과 로컬 변환을 곱하여 글로벌 변환 계산
+				GlobalBoneTransforms[i] = LocalBoneTransforms[i] * GlobalBoneTransforms[ParentIndex];
+			}
 		}
 		// 스키닝 매트릭스 계산
 		SkinningMatrices[i] = Bones[i].InverseBindPose * GlobalBoneTransforms[i];

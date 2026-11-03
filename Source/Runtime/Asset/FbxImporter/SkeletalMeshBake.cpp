@@ -2,6 +2,7 @@
 #include "SkeletalMeshBake.h"
 
 #include <cstring>
+#include <cmath>
 #include <fstream>
 #include <type_traits>
 
@@ -27,6 +28,12 @@ namespace
 		// 'S''K'eletal Mesh 'B'a'K'e
 		char Magic[4] = { 'S', 'K', 'B', 'K' };
 		uint32 Version = BakeVersion;
+	};
+
+	struct FAnimationBakeHeader
+	{
+		char Magic[4] = { 'A', 'N', 'B', 'K' };
+		uint32 Version = 3;
 	};
 
 	// 숫자 || 숫자만 있는 구조체
@@ -212,4 +219,69 @@ TUniquePtr<FSkeletalMeshData> FSkeletalMeshBake::ReadBaked(const FString& BinPat
 
 	HTR_LOG(Info, "[BAKE] {}: loaded", BinPath);
 	return Data;
+}
+
+bool FSkeletalMeshBake::WriteAnimations(const FString& BinPath, const TArray<FAnimationClip>& Clips)
+{
+	std::ofstream Out(BinPath, std::ios::binary | std::ios::trunc);
+	if (!Out) return false;
+	WritePod(Out, FAnimationBakeHeader());
+	WritePod(Out, static_cast<uint32>(Clips.Num()));
+	for (const FAnimationClip& Clip : Clips)
+	{
+		WriteString(Out, Clip.Name);
+		WriteString(Out, Clip.SkeletonName);
+		WritePod(Out, Clip.FramesPerSecond);
+		WritePod(Out, Clip.DurationSeconds);
+		WritePod(Out, static_cast<uint32>(Clip.BoneNames.Num()));
+		for (const FString& BoneName : Clip.BoneNames) WriteString(Out, BoneName);
+		WriteArray(Out, Clip.ParentIndices);
+		WritePod(Out, static_cast<uint32>(Clip.Frames.Num()));
+		for (const FAnimationFrame& Frame : Clip.Frames) WriteArray(Out, Frame.Bones);
+	}
+	return static_cast<bool>(Out);
+}
+
+bool FSkeletalMeshBake::ReadAnimations(const FString& BinPath, TArray<FAnimationClip>& OutClips)
+{
+	std::ifstream In(BinPath, std::ios::binary);
+	if (!In) return false;
+	FAnimationBakeHeader Header;
+	const FAnimationBakeHeader Expected;
+	if (!ReadPod(In, Header) || std::memcmp(Header.Magic, Expected.Magic, sizeof(Header.Magic)) != 0 ||
+		Header.Version != Expected.Version) return false;
+	uint32 ClipCount = 0;
+	if (!ReadPod(In, ClipCount) || ClipCount > 256) return false;
+	TArray<FAnimationClip> Loaded;
+	for (uint32 ClipIndex = 0; ClipIndex < ClipCount; ++ClipIndex)
+	{
+		FAnimationClip Clip;
+		uint32 BoneCount = 0;
+		uint32 FrameCount = 0;
+		if (!ReadString(In, Clip.Name) || !ReadString(In, Clip.SkeletonName) ||
+			!ReadPod(In, Clip.FramesPerSecond) || !ReadPod(In, Clip.DurationSeconds) ||
+			!std::isfinite(Clip.FramesPerSecond) || Clip.FramesPerSecond <= 0.0f ||
+			!std::isfinite(Clip.DurationSeconds) || Clip.DurationSeconds < 0.0f ||
+			!ReadPod(In, BoneCount) || BoneCount > 4096) return false;
+		for (uint32 BoneIndex = 0; BoneIndex < BoneCount; ++BoneIndex)
+		{
+			FString BoneName;
+			if (!ReadString(In, BoneName)) return false;
+			Clip.BoneNames.Add(std::move(BoneName));
+		}
+		if (!ReadArray(In, Clip.ParentIndices, 4096) || Clip.ParentIndices.Num() != BoneCount ||
+			!ReadPod(In, FrameCount) || FrameCount > 100000 ||
+			static_cast<uint64>(FrameCount) * BoneCount > 50000000) return false;
+		for (uint32 BoneIndex = 0; BoneIndex < BoneCount; ++BoneIndex)
+			if (Clip.ParentIndices[BoneIndex] < -1 || Clip.ParentIndices[BoneIndex] >= static_cast<int32>(BoneIndex)) return false;
+		for (uint32 FrameIndex = 0; FrameIndex < FrameCount; ++FrameIndex)
+		{
+			FAnimationFrame Frame;
+			if (!ReadArray(In, Frame.Bones, BoneCount) || Frame.Bones.Num() != BoneCount) return false;
+			Clip.Frames.Add(std::move(Frame));
+		}
+		Loaded.Add(std::move(Clip));
+	}
+	OutClips = std::move(Loaded);
+	return true;
 }

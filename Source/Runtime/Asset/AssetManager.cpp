@@ -260,7 +260,7 @@ void UAssetManager::LoadAsset(const FString& Key, const FString& Path) {
 			AssetMap[Key] = Texture;
 		}
 	}
-	if (Extension == ".json") {
+	if (Extension == ".json" && fs::path{ Path }.parent_path().filename() == "Fonts") {
 		const FString TexturePath{ fs::path{ Path }.replace_extension(".png").string() };
 		if (UFont* Font{ LoadFontAtlas(Path, TexturePath) }) {
 			AssetMap[Key] = Font;
@@ -425,6 +425,7 @@ void UAssetManager::Shutdown()
 {
 	Get().AssetMap.Empty();
 	Get().SoundMap.Empty();
+	Get().AnimationMap.Empty();
 }
 
 
@@ -540,6 +541,20 @@ USkeletalMesh* UAssetManager::LoadFbxSkeletalMesh(const FString& Path)
 
 	Get().RegisterAsset(Key, Mesh);
 	return Mesh;
+}
+
+const TArray<FAnimationClip>* UAssetManager::LoadFbxAnimations(const FString& Path)
+{
+	const FString Key = MakeAssetKey(Path);
+	TArray<FAnimationClip> Clips;
+	if (!FFbxImporter::LoadAnimationClips(Path, Clips)) return nullptr;
+	Get().AnimationMap.FindOrAdd(Key) = std::move(Clips);
+	return Get().AnimationMap.Find(Key);
+}
+
+const TArray<FAnimationClip>* UAssetManager::GetFbxAnimations(const FString& AssetKey)
+{
+	return Get().AnimationMap.Find(AssetKey);
 }
 
 bool UAssetManager::ReorientStaticMesh(UStaticMesh& Mesh, const std::function<FVector(const FVector&)>& Rotate)

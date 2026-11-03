@@ -26,9 +26,10 @@ namespace
 	}
 }
 
-bool ApplyStaticRigPose(const USkeletalMesh& SourceRig, USkeletalMeshComponent& TargetMesh,
+static bool ApplyRigPose(const USkeletalMesh& SourceRig, const TArray<FMatrix>* SourceGlobalPose,
+	USkeletalMeshComponent& TargetMesh,
 	const TArray<int32>& TargetBoneToSourceBone, const TArray<int32>& TargetAimChild,
-	int32 SourceYawQuarterTurns, FString& OutError)
+	int32 SourceYawQuarterTurns, FString& OutError) // 각 본이 향하는 방향을 Source의 기준 자세 또는 애니메이션 자세에 맞추는 코드
 {
 	USkeletalMesh* TargetAsset = TargetMesh.GetSkeletalMesh();
 	if (!TargetAsset)
@@ -39,7 +40,7 @@ bool ApplyStaticRigPose(const USkeletalMesh& SourceRig, USkeletalMeshComponent& 
 	const TArray<FBoneInfo>& Source = SourceRig.MeshData.Bones;
 	const TArray<FBoneInfo>& Target = TargetAsset->MeshData.Bones;
 	if (Source.IsEmpty() || Target.IsEmpty() || TargetBoneToSourceBone.Num() != Target.Num() ||
-		TargetAimChild.Num() != Target.Num())
+		TargetAimChild.Num() != Target.Num() || (SourceGlobalPose && SourceGlobalPose->Num() != Source.Num()))
 	{
 		OutError = "Both rigs need bones and a complete mapping table.";
 		return false;
@@ -53,10 +54,8 @@ bool ApplyStaticRigPose(const USkeletalMesh& SourceRig, USkeletalMeshComponent& 
 
 	const FMatrix Axis = FQuat::MakeFromAxisAngle(FVector(0, 0, 1),
 		static_cast<float>(SourceYawQuarterTurns) * 1.57079632679f).ToFMatrix();
-	TArray<FMatrix> Local;
 	TArray<FMatrix> Global;
 	int32 AlignedChains = 0;
-	Local.SetNum(Target.Num());
 	Global.SetNum(Target.Num());
 	for (int32 Index = 0; Index < Target.Num(); ++Index)
 	{
@@ -66,8 +65,7 @@ bool ApplyStaticRigPose(const USkeletalMesh& SourceRig, USkeletalMeshComponent& 
 			OutError = "Target bones must be ordered parent before child.";
 			return false;
 		}
-		Local[Index] = Target[Index].LocalBindPose;
-		Global[Index] = Parent < 0 ? Local[Index] : Local[Index] * Global[Parent];
+		Global[Index] = Parent < 0 ? Target[Index].GlobalBindPose : Target[Index].LocalBindPose * Global[Parent];
 		const int32 SourceIndex = TargetBoneToSourceBone[Index];
 		if (SourceIndex < 0) continue;
 
@@ -77,20 +75,23 @@ bool ApplyStaticRigPose(const USkeletalMesh& SourceRig, USkeletalMeshComponent& 
 			if (Target[Child].ParentIndex != Index) continue;
 			if (TargetAimChild[Index] >= 0 && TargetAimChild[Index] != Child) continue;
 			const int32 SourceChild = TargetBoneToSourceBone[Child];
+
 			if (SourceChild < 0 || SourceChild == SourceIndex) continue;
 			bool bDescendant = false;
-			for (int32 Ancestor = Source[SourceChild].ParentIndex; Ancestor >= 0 && Ancestor < Source.Num();
-				Ancestor = Source[Ancestor].ParentIndex)
+			for (int32 Ancestor = Source[SourceChild].ParentIndex; Ancestor >= 0 && Ancestor < Source.Num(); Ancestor = Source[Ancestor].ParentIndex)
 				if (Ancestor == SourceIndex) { bDescendant = true; break; }
+
 			if (!bDescendant) continue;
+
 			const FVector CurrentOrigin = Global[Index].TransformPosition(FVector::ZeroVector);
 			const FVector CurrentChild = (Target[Child].LocalBindPose * Global[Index]).TransformPosition(FVector::ZeroVector);
-			const FVector SourceOrigin = Source[SourceIndex].GlobalBindPose.TransformPosition(FVector::ZeroVector);
-			const FVector SourceTip = Source[SourceChild].GlobalBindPose.TransformPosition(FVector::ZeroVector);
+			const FMatrix& SourceParentPose = SourceGlobalPose ? (*SourceGlobalPose)[SourceIndex] : Source[SourceIndex].GlobalBindPose;
+			const FMatrix& SourceChildPose = SourceGlobalPose ? (*SourceGlobalPose)[SourceChild] : Source[SourceChild].GlobalBindPose;
+			const FVector SourceOrigin = SourceParentPose.TransformPosition(FVector::ZeroVector);
+			const FVector SourceTip = SourceChildPose.TransformPosition(FVector::ZeroVector);
 			const FVector DesiredDirection = Axis.TransformVector(SourceTip - SourceOrigin);
 			FMatrix DesiredGlobal = Global[Index] * RotationBetween(CurrentChild - CurrentOrigin, DesiredDirection);
 			DesiredGlobal.SetOrigin(CurrentOrigin);
-			Local[Index] = Parent < 0 ? DesiredGlobal : DesiredGlobal * Global[Parent].Inverse();
 			Global[Index] = DesiredGlobal;
 			++AlignedChains;
 			break;
@@ -102,10 +103,24 @@ bool ApplyStaticRigPose(const USkeletalMesh& SourceRig, USkeletalMeshComponent& 
 		return false;
 	}
 
-	TargetMesh.InitBoneTransforms();
-	for (int32 Index = 0; Index < Local.Num(); ++Index)
-		TargetMesh.SetBoneTransform(Index, Local[Index]);
+	TargetMesh.SetGlobalBoneTransforms(Global);
 	TargetMesh.PerformCPUSkinning();
 	OutError.clear();
 	return true;
+}
+
+bool ApplyStaticRigPose(const USkeletalMesh& SourceRig, USkeletalMeshComponent& TargetMesh,
+	const TArray<int32>& TargetBoneToSourceBone, const TArray<int32>& TargetAimChild,
+	int32 SourceYawQuarterTurns, FString& OutError)
+{
+	return ApplyRigPose(SourceRig, nullptr, TargetMesh, TargetBoneToSourceBone,
+		TargetAimChild, SourceYawQuarterTurns, OutError);
+}
+
+bool ApplyAnimatedRigPose(const USkeletalMesh& SourceRig, const TArray<FMatrix>& SourceGlobalPose,
+	USkeletalMeshComponent& TargetMesh, const TArray<int32>& TargetBoneToSourceBone,
+	const TArray<int32>& TargetAimChild, int32 SourceYawQuarterTurns, FString& OutError)
+{
+	return ApplyRigPose(SourceRig, &SourceGlobalPose, TargetMesh, TargetBoneToSourceBone,
+		TargetAimChild, SourceYawQuarterTurns, OutError);
 }

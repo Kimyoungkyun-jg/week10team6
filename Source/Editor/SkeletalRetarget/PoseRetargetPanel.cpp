@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <unordered_set>
 
 namespace
 {
@@ -27,6 +28,49 @@ namespace
 		std::transform(Extension.begin(), Extension.end(), Extension.begin(),
 			[](unsigned char Character) { return static_cast<char>(std::tolower(Character)); });
 		return Extension == ".fbx";
+	}
+
+	FString BoneMatchKey(const FString& Name)
+	{
+		const auto ReadNumber = [](const FString& Value, size_t Start)
+		{
+			int32 Result = 0;
+			for (size_t Index = Start; Index < Value.size(); ++Index)
+				Result = std::min(1000000, Result * 10 + Value[Index] - '0');
+			return Result;
+		};
+		TArray<FString> Tokens;
+		FString Token;
+		for (unsigned char Character : Name)
+		{
+			if (std::isalnum(Character)) Token += static_cast<char>(std::tolower(Character));
+			else if (!Token.empty()) { Tokens.Add(std::move(Token)); Token.clear(); }
+		}
+		if (!Token.empty()) Tokens.Add(std::move(Token));
+		FString Side;
+		FString Base;
+		int32 Number = -1;
+		for (int32 Index = 0; Index < Tokens.Num(); ++Index)
+		{
+			const FString& Part = Tokens[Index];
+			if (Part == "left" || Part == "l") { Side = "left"; continue; }
+			if (Part == "right" || Part == "r") { Side = "right"; continue; }
+			const size_t LastLetter = Part.find_last_not_of("0123456789");
+			if (LastLetter == FString::npos)
+			{
+				Number = ReadNumber(Part, 0);
+				continue;
+			}
+			if (Part == "bn" || Part == "m" || Part == "bip001") continue;
+			Base = Part;
+			Number = -1;
+			if (LastLetter + 1 < Part.size())
+			{
+				Base = Part.substr(0, LastLetter + 1);
+				Number = ReadNumber(Part, LastLetter + 1);
+			}
+		}
+		return Base.empty() ? FString() : Base + "|" + Side + "|" + std::to_string(Number);
 	}
 }
 
@@ -93,17 +137,27 @@ void FPoseRetargetPanel::SetRig(int32 Index, USkeletalMesh* Mesh)
 {
 	if (Index == 0)
 	{
-		if (SourceRig != Mesh)
+		if (SourceRig != Mesh) // Source FBX 바뀌었는 지 확인
 		{
 			for (int32& Bone : TargetToSource) Bone = -1;
-			if (Components[2]) Components[2]->InitBoneTransforms();
+			if (Components[2]) Components[2]->InitBoneTransforms(); // 다시 target fbx로 초기화
+			AnimationMessage.clear();
+			SelectedAnimation = -1;
+			LastAnimationFrame = -1;
+			AnimationTime = 0.0f;
+			bAnimationPlaying = false;
+			bResultPoseApplied = false;
+			AlignedSourceClip = FAnimationClip{};
 		}
 		SourceRig = Mesh;
 	}
 	else TargetMesh = Mesh;
+
 	Components[Index]->SetSkeletalMesh(Mesh);
+
 	if (Index == 1)
 	{
+		bResultPoseApplied = false;
 		Components[2]->SetSkeletalMesh(Mesh);
 		TargetToSource.SetNum(Mesh ? Mesh->MeshData.Bones.Num() : 0);
 		for (int32& Bone : TargetToSource) Bone = -1;
@@ -120,6 +174,98 @@ void FPoseRetargetPanel::Tick(float DeltaTime)
 	if (!IsOpen()) return;
 	for (int32 Index = 0; Index < 3; ++Index)
 		if (PreviewWorlds[Index]) PreviewWorlds[Index]->Tick(DeltaTime);
+	if (bAnimationPlaying && SourceRig && SelectedAnimation >= 0)
+	{
+		const float Duration = AlignedSourceClip.DurationSeconds;
+		if (Duration > 0.0f)
+		{
+			AnimationTime = std::fmod(AnimationTime + std::max(0.0f, DeltaTime), Duration);
+			ApplyAnimationFrame();
+		}
+	}
+}
+
+void FPoseRetargetPanel::SelectAnimation(int32 ClipIndex)
+{
+	bAnimationPlaying = false;
+	AnimationTime = 0.0f;
+	LastAnimationFrame = -1;
+	SelectedAnimation = -1;
+	AlignedSourceClip = FAnimationClip{};
+	if (!SourceRig || !Components[0]) return;
+	if (ClipIndex < 0)
+	{
+		Components[0]->InitBoneTransforms();
+		if (bResultPoseApplied && Components[2])
+			ApplyStaticRigPose(*SourceRig, *Components[2], TargetToSource, TargetAimChild, SourceYaw, Message);
+		return;
+	}
+	const TArray<FAnimationClip>* Clips = UAssetManager::GetFbxAnimations(SourceRig->GetPath());
+	if (!Clips || ClipIndex >= Clips->Num()) return;
+	const FAnimationClip& Clip = (*Clips)[ClipIndex];
+	const TArray<FBoneInfo>& Bones = SourceRig->MeshData.Bones;
+	if (Clip.BoneNames.Num() != Bones.Num() || Clip.ParentIndices.Num() != Bones.Num() || Clip.Frames.IsEmpty() ||
+		Clip.Frames[0].Bones.Num() != Bones.Num())
+	{
+		Components[0]->InitBoneTransforms();
+		AnimationMessage = "Animation skeleton does not match Source FBX.";
+		return;
+	}
+	for (int32 Index = 0; Index < Bones.Num(); ++Index)
+		if (Clip.BoneNames[Index] != Bones[Index].Name || Clip.ParentIndices[Index] != Bones[Index].ParentIndex)
+		{
+			Components[0]->InitBoneTransforms();
+			AnimationMessage = "Animation skeleton does not match Source FBX.";
+			return;
+		}
+	TArray<FMatrix> RootCorrections;
+	RootCorrections.SetNum(Bones.Num());
+	for (int32 Index = 0; Index < Bones.Num(); ++Index)
+	{
+		const int32 Parent = Bones[Index].ParentIndex;
+		RootCorrections[Index] = Parent < 0 ?
+			Clip.Frames[0].Bones[Index].Inverse() * Bones[Index].GlobalBindPose : RootCorrections[Parent];
+	}
+	AlignedSourceClip = Clip;
+	for (int32 FrameIndex = 0; FrameIndex < Clip.Frames.Num(); ++FrameIndex)
+	{
+		if (Clip.Frames[FrameIndex].Bones.Num() != Bones.Num())
+		{
+			AlignedSourceClip = FAnimationClip{};
+			Components[0]->InitBoneTransforms();
+			AnimationMessage = "Animation skeleton does not match Source FBX.";
+			return;
+		}
+		for (int32 BoneIndex = 0; BoneIndex < Bones.Num(); ++BoneIndex)
+			AlignedSourceClip.Frames[FrameIndex].Bones[BoneIndex] =
+				Clip.Frames[FrameIndex].Bones[BoneIndex] * RootCorrections[BoneIndex];
+	}
+	SelectedAnimation = ClipIndex;
+	AnimationMessage.clear();
+	ApplyAnimationFrame();
+}
+
+void FPoseRetargetPanel::ApplyAnimationFrame()
+{
+	if (!SourceRig || !Components[0] || SelectedAnimation < 0) return;
+	const FAnimationClip& Clip = AlignedSourceClip;
+	if (Clip.Frames.IsEmpty()) return;
+	const int32 FrameIndex = AnimationTime >= Clip.DurationSeconds ? Clip.Frames.Num() - 1 :
+		std::clamp(static_cast<int32>(AnimationTime * Clip.FramesPerSecond), 0, Clip.Frames.Num() - 1);
+	if (FrameIndex == LastAnimationFrame) return;
+	Components[0]->SetGlobalBoneTransforms(Clip.Frames[FrameIndex].Bones);
+	Components[0]->PerformCPUSkinning();
+	if (bResultPoseApplied && Components[2] && TargetMesh)
+	{
+		FString Error;
+		if (!ApplyAnimatedRigPose(*SourceRig, Components[0]->GetGlobalBoneTransforms(), *Components[2],
+			TargetToSource, TargetAimChild, SourceYaw, Error))
+		{
+			Message = Error;
+			bResultPoseApplied = false;
+		}
+	}
+	LastAnimationFrame = FrameIndex;
 }
 
 void FPoseRetargetPanel::DrawRigPicker(int32 Index)
@@ -195,17 +341,39 @@ void FPoseRetargetPanel::DrawMapping()
 	const TArray<FBoneInfo>& Target = TargetMesh->MeshData.Bones;
 	ImGui::SeparatorText("Target bone -> Source bone");
 	ImGui::TextDisabled("Map parent and child bones. Aim child selects the branch that controls the parent direction.");
-	if (ImGui::Button("Match identical names"))
-		for (int32 TargetIndex = 0; TargetIndex < Target.Num(); ++TargetIndex)
-			for (int32 SourceIndex = 0; SourceIndex < Source.Num(); ++SourceIndex)
-				if (Target[TargetIndex].Name == Source[SourceIndex].Name)
+	if (ImGui::Button("Match names and numbers"))
+	{
+		std::unordered_set<int32> Used;
+		for (int32 Mapped : TargetToSource) if (Mapped >= 0) Used.insert(Mapped);
+		for (int Pass = 0; Pass < 2; ++Pass)
+			for (int32 TargetIndex = 0; TargetIndex < Target.Num(); ++TargetIndex)
+			{
+				if (TargetToSource[TargetIndex] >= 0) continue;
+				const FString Key = Pass == 0 ? Target[TargetIndex].Name : BoneMatchKey(Target[TargetIndex].Name);
+				if (Key.empty()) continue;
+				int32 Candidate = -1;
+				bool bAmbiguous = false;
+				for (int32 SourceIndex = 0; SourceIndex < Source.Num(); ++SourceIndex)
 				{
-					TargetToSource[TargetIndex] = SourceIndex;
-					break;
+					if (Used.contains(SourceIndex)) continue;
+					const FString SourceKey = Pass == 0 ? Source[SourceIndex].Name : BoneMatchKey(Source[SourceIndex].Name);
+					if (Key != SourceKey) continue;
+					if (Candidate >= 0) { bAmbiguous = true; break; }
+					Candidate = SourceIndex;
 				}
+				if (Candidate >= 0 && !bAmbiguous)
+				{
+					TargetToSource[TargetIndex] = Candidate;
+					Used.insert(Candidate);
+				}
+			}
+		LastAnimationFrame = -1;
+		if (SelectedAnimation >= 0 && bResultPoseApplied) ApplyAnimationFrame();
+	}
 	float TargetColumnX = 220.0f;
 	float SourceWidth = 200.0f;
 	float AimWidth = 140.0f;
+
 	for (int32 Index = 0; Index < Target.Num(); ++Index)
 	{
 		int32 Depth = 0;
@@ -215,9 +383,12 @@ void FPoseRetargetPanel::DrawMapping()
 			ImGui::CalcTextSize(Target[Index].Name.c_str()).x + std::min(Depth, 6) * 10.0f + 24.0f);
 		AimWidth = std::max(AimWidth, ImGui::CalcTextSize(Target[Index].Name.c_str()).x + 40.0f);
 	}
+
 	for (const FBoneInfo& Bone : Source)
 		SourceWidth = std::max(SourceWidth, ImGui::CalcTextSize(Bone.Name.c_str()).x + 40.0f);
-	ImGui::BeginChild("Bone mapping", ImVec2(0, 240), true, ImGuiWindowFlags_HorizontalScrollbar);
+	ImGui::BeginChild("Bone mapping", ImVec2(0, std::max(240.0f, ImGui::GetWindowSize().y - 180.0f)),
+		true, ImGuiWindowFlags_HorizontalScrollbar);
+
 	for (int32 TargetIndex = 0; TargetIndex < Target.Num(); ++TargetIndex)
 	{
 		ImGui::PushID(TargetIndex);
@@ -229,6 +400,7 @@ void FPoseRetargetPanel::DrawMapping()
 		ImGui::SameLine(TargetColumnX);
 		const int32 Mapped = TargetToSource[TargetIndex];
 		const char* Current = Mapped >= 0 && Mapped < Source.Num() ? Source[Mapped].Name.c_str() : "Unmapped";
+
 		ImGui::SetNextItemWidth(SourceWidth);
 		if (ImGui::BeginCombo("##SourceBone", Current))
 		{
@@ -238,6 +410,7 @@ void FPoseRetargetPanel::DrawMapping()
 					TargetToSource[TargetIndex] = SourceIndex;
 			ImGui::EndCombo();
 		}
+
 		ImGui::SameLine(TargetColumnX + SourceWidth + ImGui::GetStyle().ItemSpacing.x);
 		const int32 Aim = TargetAimChild[TargetIndex];
 		const char* AimLabel = Aim >= 0 && Aim < Target.Num() ? Target[Aim].Name.c_str() : "Auto child";
@@ -256,12 +429,45 @@ void FPoseRetargetPanel::DrawMapping()
 	}
 	ImGui::EndChild();
 	const char* YawLabels[] = { "0 degrees", "90 degrees", "180 degrees", "270 degrees" };
-	ImGui::Combo("Source forward yaw", &SourceYaw, YawLabels, 4);
+	if (ImGui::Combo("Source forward yaw", &SourceYaw, YawLabels, 4))
+	{
+		LastAnimationFrame = -1;
+		if (SelectedAnimation >= 0) ApplyAnimationFrame();
+	}
 	if (ImGui::Button("Apply source rest pose"))
-		if (ApplyStaticRigPose(*SourceRig, *Components[2], TargetToSource, TargetAimChild, SourceYaw, Message))
+	{
+		bResultPoseApplied = ApplyStaticRigPose(*SourceRig, *Components[2], TargetToSource, TargetAimChild, SourceYaw, Message); // 실제로 맵핑된 정보로 target mesh를 source mesh pose 로 적용
+		if (bResultPoseApplied)
+		{
 			Message = "Source rest pose applied to the target mesh.";
+			LastAnimationFrame = -1;
+			if (SelectedAnimation >= 0) ApplyAnimationFrame();
+		}
+	}
 	ImGui::SameLine();
-	if (ImGui::Button("Reset target pose")) Components[2]->InitBoneTransforms();
+	if (ImGui::Button("Reset target pose"))
+	{
+		bResultPoseApplied = false;
+		Components[2]->InitBoneTransforms();
+	}
+	ImGui::SetNextItemWidth(std::max(250.0f, ImGui::GetContentRegionAvail().x - 140.0f));
+	if (ImGui::BeginCombo("Mapping file", ProfileName))
+	{
+		std::map<FString, bool> Profiles;
+		std::error_code Error;
+		const std::filesystem::path Directory("Assets/RetargetProfiles");
+		for (std::filesystem::directory_iterator It(Directory, Error), End; !Error && It != End; It.increment(Error))
+			if (It->is_regular_file() && It->path().extension() == ".json")
+				Profiles.emplace(It->path().stem().string(), true);
+		for (const auto& Profile : Profiles)
+			if (ImGui::Selectable(Profile.first.c_str(), Profile.first == ProfileName))
+			{
+				const size_t Length = std::min(Profile.first.size(), sizeof(ProfileName) - 1);
+				std::copy_n(Profile.first.begin(), Length, ProfileName);
+				ProfileName[Length] = '\0';
+			}
+		ImGui::EndCombo();
+	}
 	ImGui::InputText("Profile name", ProfileName, sizeof(ProfileName));
 	const FString Name(ProfileName);
 	const bool bValidName = !Name.empty() && Name.find_first_not_of(
@@ -269,6 +475,7 @@ void FPoseRetargetPanel::DrawMapping()
 	const std::filesystem::path ProfileFile = std::filesystem::path("Assets/RetargetProfiles") / (Name + ".json");
 	if (!bValidName) ImGui::TextUnformatted("Use letters, numbers, _ or - in the profile name.");
 	ImGui::BeginDisabled(!bValidName);
+
 	if (ImGui::Button("Save mapping"))
 	{
 		json File;
@@ -341,6 +548,54 @@ void FPoseRetargetPanel::OnRender()
 	}
 	DrawRigPicker(0);
 	DrawRigPicker(1);
+	if (SourceRig)
+	{
+		if (ImGui::Button("Extract source animations"))
+		{
+			SelectAnimation(-1);
+			const FString Path = (std::filesystem::path("Assets") / SourceRig->GetPath()).generic_string();
+			const TArray<FAnimationClip>* Clips = UAssetManager::LoadFbxAnimations(Path);
+			AnimationMessage = !Clips ? "Animation extraction failed." :
+				Clips->IsEmpty() ? "No animation clips found in Source FBX." : "Animations extracted and saved.";
+		}
+		if (const TArray<FAnimationClip>* Clips = UAssetManager::GetFbxAnimations(SourceRig->GetPath()))
+		{
+			ImGui::SameLine();
+			ImGui::Text("%d clips", Clips->Num());
+			if (!Clips->IsEmpty())
+			{
+				const char* Current = SelectedAnimation >= 0 && SelectedAnimation < Clips->Num()
+					? (*Clips)[SelectedAnimation].Name.c_str() : "Select animation";
+				ImGui::SetNextItemWidth(std::max(120.0f, ImGui::GetContentRegionAvail().x - 150.0f));
+				if (ImGui::BeginCombo("Source animation", Current))
+				{
+					if (ImGui::Selectable("None", SelectedAnimation < 0)) SelectAnimation(-1);
+					for (int32 ClipIndex = 0; ClipIndex < Clips->Num(); ++ClipIndex)
+					{
+						ImGui::PushID(ClipIndex);
+						if (ImGui::Selectable((*Clips)[ClipIndex].Name.c_str(), SelectedAnimation == ClipIndex))
+							SelectAnimation(ClipIndex);
+						ImGui::PopID();
+					}
+					ImGui::EndCombo();
+				}
+				if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", Current);
+				if (SelectedAnimation >= 0 && SelectedAnimation < Clips->Num())
+				{
+					const FAnimationClip& Clip = (*Clips)[SelectedAnimation];
+					if (ImGui::Button(bAnimationPlaying ? "Pause" : "Play")) bAnimationPlaying = !bAnimationPlaying;
+					ImGui::SameLine();
+					ImGui::Text("%d frames, %d bones", Clip.Frames.Num(), Clip.BoneNames.Num());
+					if (ImGui::SliderFloat("Time", &AnimationTime, 0.0f, Clip.DurationSeconds, "%.2f s"))
+					{
+						LastAnimationFrame = -1;
+						ApplyAnimationFrame();
+					}
+				}
+			}
+		}
+		if (!AnimationMessage.empty()) ImGui::TextWrapped("%s", AnimationMessage.c_str());
+	}
 	if (ImGui::Button("Refresh FBX list")) RefreshFbxFiles();
 	ImGui::Checkbox("Show bones", &bShowBones);
 	ImGui::SameLine();
@@ -355,8 +610,11 @@ void FPoseRetargetPanel::OnRender()
 	ImGui::Combo("View", &FocusMode, ViewModes, 4);
 	const bool bMappingVisible = bShowMapping && SourceRig && TargetMesh;
 	const float AvailableHeight = std::max(1.0f, ImGui::GetContentRegionAvail().y);
-	const float MappingHeight = bMappingVisible ? std::min(320.0f, AvailableHeight * 0.35f) : 0.0f;
-	const float ViewHeight = std::max(1.0f, AvailableHeight - MappingHeight - (bMappingVisible ? ImGui::GetStyle().ItemSpacing.y : 0.0f));
+	const float SplitterHeight = bMappingVisible ? 8.0f : 0.0f;
+	const float MappingHeight = bMappingVisible ?
+		std::min(MappingPanelHeight, std::max(160.0f, AvailableHeight - 120.0f - SplitterHeight)) : 0.0f;
+	const float ViewHeight = std::max(1.0f, AvailableHeight - MappingHeight - SplitterHeight -
+		(bMappingVisible ? ImGui::GetStyle().ItemSpacing.y * 2.0f : 0.0f));
 	const char* ViewLabels[] = { "Source FBX", "Target FBX", "Result" };
 	int32 RemainingViews = FocusMode == 0 ? 3 : 1;
 	for (int32 Index = 0; Index < 3; ++Index)
@@ -370,6 +628,18 @@ void FPoseRetargetPanel::OnRender()
 	}
 	if (bMappingVisible)
 	{
+		ImGui::InvisibleButton("##MappingSplitter", ImVec2(ImGui::GetContentRegionAvail().x, SplitterHeight));
+		const ImVec2 SplitMin = ImGui::GetItemRectMin();
+		const ImVec2 SplitMax = ImGui::GetItemRectMax();
+		ImGui::GetWindowDrawList()->AddLine(
+			ImVec2(SplitMin.x, (SplitMin.y + SplitMax.y) * 0.5f),
+			ImVec2(SplitMax.x, (SplitMin.y + SplitMax.y) * 0.5f),
+			ImGui::GetColorU32(ImGuiCol_Separator), 2.0f);
+		if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+			ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+		if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+			MappingPanelHeight = std::clamp(MappingPanelHeight - ImGui::GetIO().MouseDelta.y,
+				160.0f, std::max(160.0f, AvailableHeight - 120.0f - SplitterHeight));
 		ImGui::BeginChild("Mapping controls", ImVec2(0, MappingHeight), true);
 		DrawMapping();
 		ImGui::EndChild();

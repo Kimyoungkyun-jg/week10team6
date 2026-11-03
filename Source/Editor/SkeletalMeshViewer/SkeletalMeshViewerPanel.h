@@ -8,9 +8,18 @@ class UWorld;
 class USkeletalMesh;
 class USkeletalMeshComponent;
 class ASkeletalMeshActor;
+class UTexture2D;
 class FLineBatcher;
 class FGizmoRenderer;
 #include "Render/SkyboxRenderer.h"
+
+enum class EBoneDrawMode : uint8
+{
+	AllHierarchy,       // 모든 계층구조
+	SelectedOnly,       // 선택된 본만
+	SelectedAndParents, // 선택된 본과 부모
+	None                // 없음
+};
 
 class FSkeletalMeshViewerPanel : public IEditorPanel
 {
@@ -37,6 +46,7 @@ public:
 private:
 	void DrawHierarchyTree();
 	void DrawViewport();
+	void DrawViewportToolbar();
 	void DrawDetails();
 	// 재귀적으로 본 노드를 그리는 함수
 	void DrawBoneNode(int32 BoneIndex);
@@ -74,8 +84,9 @@ private:
 	FTransform SelectedBoneTransform;
 
 	// 표시 옵션
-	bool bShowBones = true;
+	EBoneDrawMode BoneDrawMode = EBoneDrawMode::AllHierarchy;
 	bool bShowMesh = true;
+	UTexture2D* ShowFlagsIcon = nullptr;
 	// 초기 레이아웃 설정 값
 	bool bInitialLayoutSet = false;
 	float InitialLeftTreeWidthRatio = 0.22f;

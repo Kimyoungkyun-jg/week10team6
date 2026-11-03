@@ -135,6 +135,7 @@ bool FSkeletalMeshViewerPanel::Init()
 	if (!PreviewActor) return false;
 	PreviewActor->GetSkeletalMeshComponent()->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
 	MeshComponent = PreviewActor->GetSkeletalMeshComponent();
+	MeshComponent->SetVisibility(bShowMesh);
 
 	// 기본 스카이라이트 조명 스폰
 	if (ASkyLightActor* SkyLight = PreviewWorld->SpawnActor<ASkyLightActor>())
@@ -149,13 +150,6 @@ bool FSkeletalMeshViewerPanel::Init()
 		DirLight->GetArrowComponent()->SetVisibility(false);
 		DirLight->GetLightComponent()->SetIntensity(0.3f);
 		DirLight->GetLightComponent()->SetRelativeRotation(FRotator(10.0f, 30.0f, -140.0f));
-	}
-
-	if (AStaticMeshActor* Floor = PreviewWorld->SpawnActor<AStaticMeshActor>())
-	{
-		Floor->GetStaticMeshComponent()->SetStaticMesh(UAssetManager::GetAssetByPath<UStaticMesh>("Sphere"));
-		Floor->GetStaticMeshComponent()->SetRelativeScale3D(FVector(10.0f, 10.0f, 1.0f));
-		Floor->GetStaticMeshComponent()->SetRelativeLocation(FVector(0.0f, 0.0f, -0.5f));
 	}
 
 	// 뷰어 전용 스카이박스 초기화 (Assets/SkySphere/SkeletalMeshViewer.hdr)
@@ -269,8 +263,126 @@ void FSkeletalMeshViewerPanel::BuildBoneHierarchy()
 	}
 }
 
+void FSkeletalMeshViewerPanel::DrawViewportToolbar()
+{
+	if (!ShowFlagsIcon)
+	{
+		ShowFlagsIcon = UAssetManager::GetAssetByPath<UTexture2D>("Assets/Icons/Visible.png");
+		if (!ShowFlagsIcon)
+		{
+			ShowFlagsIcon = UAssetManager::Get().LoadTexture("Assets/Icons/Visible.png");
+		}
+	}
+
+	bool bOpenPopup = false;
+
+	const float IconWidth = 28.0f;
+	const float IconHeight = 25.0f;
+	const float ChevronWidth = 7.0f;
+	const float ChevronHeight = 4.0f;
+	const float Spacing = 6.0f;
+	const ImVec2 Padding(8.0f, 4.0f);
+	const ImVec2 TotalSize(Padding.x * 2.0f + IconWidth + Spacing + ChevronWidth, IconHeight + Padding.y * 2.0f);
+
+	const ImVec2 CursorScreenPos = ImGui::GetCursorScreenPos();
+	if (ImGui::InvisibleButton("##ShowFlagsUnifiedBtn", TotalSize))
+	{
+		bOpenPopup = true;
+	}
+
+	const bool bHovered = ImGui::IsItemHovered();
+	const bool bActive = ImGui::IsItemActive();
+
+	if (bHovered)
+	{
+		ImGui::SetTooltip("Show Flags (Mesh, Bones)");
+	}
+
+	const ImU32 BgColor = bActive ? IM_COL32(35, 35, 35, 255) :
+	                      bHovered ? IM_COL32(70, 70, 70, 255) :
+	                      IM_COL32(50, 50, 50, 220);
+	const ImU32 BorderColor = bHovered ? IM_COL32(110, 110, 110, 220) : IM_COL32(65, 65, 65, 180);
+	const float Rounding = 5.0f;
+
+	ImDrawList* DrawList = ImGui::GetWindowDrawList();
+	const ImVec2 RectMax(CursorScreenPos.x + TotalSize.x, CursorScreenPos.y + TotalSize.y);
+	DrawList->AddRectFilled(CursorScreenPos, RectMax, BgColor, Rounding);
+	DrawList->AddRect(CursorScreenPos, RectMax, BorderColor, Rounding, 0, 1.0f);
+
+	// 아이콘 렌더링
+	if (ShowFlagsIcon && ShowFlagsIcon->GetResource() && ShowFlagsIcon->GetResource()->GetSRV())
+	{
+		const ImVec2 IconMin(CursorScreenPos.x + Padding.x, CursorScreenPos.y + (TotalSize.y - IconHeight) * 0.5f);
+		const ImVec2 IconMax(IconMin.x + IconWidth, IconMin.y + IconHeight);
+		DrawList->AddImage((ImTextureID)ShowFlagsIcon->GetResource()->GetSRV(), IconMin, IconMax);
+	}
+	else
+	{
+		const ImVec2 TextPos(CursorScreenPos.x + Padding.x, CursorScreenPos.y + (TotalSize.y - ImGui::GetTextLineHeight()) * 0.5f);
+		DrawList->AddText(TextPos, IM_COL32(220, 220, 220, 255), "Show");
+	}
+
+	const float ChevronX = CursorScreenPos.x + Padding.x + IconWidth + Spacing;
+	const float ChevronY = CursorScreenPos.y + (TotalSize.y - ChevronHeight) * 0.5f;
+	const ImU32 ChevronColor = bActive ? IM_COL32(255, 255, 255, 255) :
+	                           bHovered ? IM_COL32(230, 230, 230, 255) :
+	                           IM_COL32(190, 190, 190, 255);
+	const ImVec2 ChevronPts[3] = {
+		ImVec2(ChevronX, ChevronY),
+		ImVec2(ChevronX + ChevronWidth * 0.5f, ChevronY + ChevronHeight),
+		ImVec2(ChevronX + ChevronWidth, ChevronY)
+	};
+	DrawList->AddPolyline(ChevronPts, 3, ChevronColor, 0, 1.6f);
+
+	if (bOpenPopup)
+	{
+		ImGui::OpenPopup("ShowFlagsPopup");
+	}
+
+	if (ImGui::BeginPopup("ShowFlagsPopup"))
+	{
+		// 1. Mesh 메뉴 (오른쪽에 체크박스 서브메뉴 표시)
+		if (ImGui::BeginMenu("Mesh"))
+		{
+			if (ImGui::MenuItem("Mesh", nullptr, &bShowMesh))
+			{
+				if (MeshComponent)
+				{
+					MeshComponent->SetVisibility(bShowMesh);
+				}
+			}
+			ImGui::EndMenu();
+		}
+
+		// 2. Bones 메뉴 (오른쪽에 라디오 서브메뉴 표시)
+		if (ImGui::BeginMenu("Bones"))
+		{
+			if (ImGui::MenuItem("All Hierarchy", nullptr, BoneDrawMode == EBoneDrawMode::AllHierarchy))
+			{
+				BoneDrawMode = EBoneDrawMode::AllHierarchy;
+			}
+			if (ImGui::MenuItem("Selected Only", nullptr, BoneDrawMode == EBoneDrawMode::SelectedOnly))
+			{
+				BoneDrawMode = EBoneDrawMode::SelectedOnly;
+			}
+			if (ImGui::MenuItem("Selected and Parents", nullptr, BoneDrawMode == EBoneDrawMode::SelectedAndParents))
+			{
+				BoneDrawMode = EBoneDrawMode::SelectedAndParents;
+			}
+			if (ImGui::MenuItem("None", nullptr, BoneDrawMode == EBoneDrawMode::None))
+			{
+				BoneDrawMode = EBoneDrawMode::None;
+			}
+			ImGui::EndMenu();
+		}
+
+		ImGui::EndPopup();
+	}
+}
+
 void FSkeletalMeshViewerPanel::DrawViewport()
 {
+	DrawViewportToolbar();
 	const ImVec2 Available = ImGui::GetContentRegionAvail();
 	const ImVec2 Size(std::max(1.0f, Available.x), std::max(1.0f, Available.y - 2.0f));
 
@@ -380,12 +492,12 @@ void FSkeletalMeshViewerPanel::DrawDetails()
 
 void FSkeletalMeshViewerPanel::DrawOverlay(FLineBatcher& Lines, FGizmoRenderer& GizmoRenderer, const FMatrix& ViewProjection)
 {
-	if (bShowBones && CurrentMesh && MeshComponent)
+	if (BoneDrawMode != EBoneDrawMode::None && CurrentMesh && MeshComponent)
 	{
 		DrawBones(Lines, ViewProjection);
 	}
 
-	if (Gizmo.HasTarget())
+	if (Gizmo.HasTarget() && BoneDrawMode != EBoneDrawMode::None)
 	{
 		GizmoRenderer.OnRender(Gizmo, ViewProjection, Viewport.GetViewLocation(), false);
 	}
@@ -397,6 +509,7 @@ void FSkeletalMeshViewerPanel::SetSkeletalMesh(USkeletalMesh* InMesh)
 	if (MeshComponent)
 	{
 		MeshComponent->SetSkeletalMesh(InMesh);
+		MeshComponent->SetVisibility(bShowMesh);
 	}
 	BuildBoneHierarchy();
 	SelectBone(-1);
@@ -525,7 +638,7 @@ void FSkeletalMeshViewerPanel::DrawBoneNode(int32 BoneIndex)
 
 void FSkeletalMeshViewerPanel::DrawBones(FLineBatcher& Lines, const FMatrix& ViewProjection) const
 {
-	if (!CurrentMesh || !MeshComponent) return;
+	if (!CurrentMesh || !MeshComponent || BoneDrawMode == EBoneDrawMode::None) return;
 
 	const TArray<FBoneInfo>& Bones = CurrentMesh->MeshData.Bones;
 	const TArray<FMatrix>& Global = MeshComponent->GetGlobalBoneTransforms();
@@ -536,60 +649,112 @@ void FSkeletalMeshViewerPanel::DrawBones(FLineBatcher& Lines, const FMatrix& Vie
 	const float JointRadius = MeshSize * 0.007f;
 	const FVector ViewLocation = Viewport.GetViewLocation();
 
-	const FVector4 DefaultColor(0.2f, 0.7f, 1.0f, 1.0f);
-	const FVector4 SelectedColor(1.0f, 0.9f, 0.1f, 1.0f);
+	// 기본 남색, 선택된 본 초록색, 이어진 뼈대 콘 주황색
+	const FVector4 DefaultNavyColor(-0.5f, -0.5f, -0.3f, 1.0f);
+	const FVector4 SelectedJointColor(-0.3f, 0.5f, -0.25f, 1.0f);
+	const FVector4 ConnectedBoneColor(0.5f, 0.05f, -0.4f, 1.0f);
 
 	Lines.BeginFrame();
 
 	for (int32 Bone = 0; Bone < Bones.Num(); ++Bone)
 	{
-		const FVector Head = (Global[Bone] * World).TransformPosition(FVector::ZeroVector);
 		const bool bIsSelected = (Bone == SelectedBoneIndex);
-		const FVector4 Color = bIsSelected ? SelectedColor : DefaultColor;
 
-		// 1. 관절(Joint) 빌보드 원
-		const FVector Facing = (ViewLocation - Head).GetSafeNormal();
-		const FVector Reference = std::abs(Facing.Z) < 0.9f ? FVector(0, 0, 1) : FVector(0, 1, 0);
-		const FVector Right = FVector::Cross(Facing, Reference).GetSafeNormal();
-		const FVector Up = FVector::Cross(Facing, Right).GetSafeNormal();
+		// 표시 모드 필터링
+		bool bShouldDrawJoint = false;
+		bool bShouldDrawCone = false;
 
-		constexpr int32 Segments = 10;
-		for (int32 Segment = 0; Segment < Segments; ++Segment)
+		switch (BoneDrawMode)
 		{
-			const float A = 2.0f * PI * Segment / Segments;
-			const float B = 2.0f * PI * (Segment + 1) / Segments;
-			Lines.AddLine(Head + (Right * std::cos(A) + Up * std::sin(A)) * JointRadius,
-				Head + (Right * std::cos(B) + Up * std::sin(B)) * JointRadius, Color);
+		case EBoneDrawMode::AllHierarchy:
+			bShouldDrawJoint = true;
+			bShouldDrawCone = true;
+			break;
+
+		case EBoneDrawMode::SelectedOnly:
+			if (SelectedBoneIndex >= 0 && bIsSelected)
+			{
+				bShouldDrawJoint = true;
+				bShouldDrawCone = true;
+			}
+			break;
+
+		case EBoneDrawMode::SelectedAndParents:
+			if (SelectedBoneIndex >= 0)
+			{
+				for (int32 P = SelectedBoneIndex; P >= 0 && P < Bones.Num(); P = Bones[P].ParentIndex)
+				{
+					if (P == Bone)
+					{
+						bShouldDrawJoint = true;
+						bShouldDrawCone = true;
+						break;
+					}
+				}
+			}
+			break;
+
+		case EBoneDrawMode::None:
+		default:
+			break;
 		}
 
-		// 2. 리타겟과 동일한 3D 입체 다이아몬드(옥타헤드론) 뼈대 그리기
-		const int32 Parent = Bones[Bone].ParentIndex;
-		if (Parent < 0 || Parent >= Global.Num()) continue;
+		if (!bShouldDrawJoint && !bShouldDrawCone) continue;
 
-		const FVector Tail = (Global[Parent] * World).TransformPosition(FVector::ZeroVector);
-		const FVector Axis = Head - Tail;
-		const float Length = Axis.Size();
-		if (Length <= MeshSize * 0.0001f) continue;
+		const FVector Head = (Global[Bone] * World).TransformPosition(FVector::ZeroVector);
+		const FVector4 JointColor = bIsSelected ? SelectedJointColor : DefaultNavyColor;
 
-		const FVector Direction = Axis / Length;
-		const FVector BoneReference = std::abs(Direction.Z) < 0.9f ? FVector(0, 0, 1) : FVector(0, 1, 0);
-		const FVector Side = FVector::Cross(Direction, BoneReference).GetSafeNormal();
-		const FVector BoneUp = FVector::Cross(Direction, Side).GetSafeNormal();
-
-		const float Width = std::min(Length * 0.13f, MeshSize * 0.018f);
-		const FVector Center = Tail + Axis * 0.25f;
-		const FVector Ring[4] = {
-			Center + Side * Width,
-			Center + BoneUp * Width,
-			Center - Side * Width,
-			Center - BoneUp * Width
-		};
-
-		for (int32 Edge = 0; Edge < 4; ++Edge)
+		// 1. 관절(Joint) 빌보드 원
+		if (bShouldDrawJoint)
 		{
-			Lines.AddLine(Tail, Ring[Edge], Color);
-			Lines.AddLine(Ring[Edge], Head, Color);
-			Lines.AddLine(Ring[Edge], Ring[(Edge + 1) % 4], Color);
+			const FVector Facing = (ViewLocation - Head).GetSafeNormal();
+			const FVector Reference = std::abs(Facing.Z) < 0.9f ? FVector(0, 0, 1) : FVector(0, 1, 0);
+			const FVector Right = FVector::Cross(Facing, Reference).GetSafeNormal();
+			const FVector Up = FVector::Cross(Facing, Right).GetSafeNormal();
+
+			constexpr int32 Segments = 10;
+			for (int32 Segment = 0; Segment < Segments; ++Segment)
+			{
+				const float A = 2.0f * PI * Segment / Segments;
+				const float B = 2.0f * PI * (Segment + 1) / Segments;
+				Lines.AddLine(Head + (Right * std::cos(A) + Up * std::sin(A)) * JointRadius,
+					Head + (Right * std::cos(B) + Up * std::sin(B)) * JointRadius, JointColor);
+			}
+		}
+
+		// 2. 3D 입체 다이아몬드(옥타헤드론) 뼈대 그리기 (선택된 본으로 이어지는 콘은 주황색)
+		if (bShouldDrawCone)
+		{
+			const int32 Parent = Bones[Bone].ParentIndex;
+			if (Parent < 0 || Parent >= Global.Num()) continue;
+
+			const FVector4 BoneColor = bIsSelected ? ConnectedBoneColor : DefaultNavyColor;
+
+			const FVector Tail = (Global[Parent] * World).TransformPosition(FVector::ZeroVector);
+			const FVector Axis = Head - Tail;
+			const float Length = Axis.Size();
+			if (Length <= MeshSize * 0.0001f) continue;
+
+			const FVector Direction = Axis / Length;
+			const FVector BoneReference = std::abs(Direction.Z) < 0.9f ? FVector(0, 0, 1) : FVector(0, 1, 0);
+			const FVector Side = FVector::Cross(Direction, BoneReference).GetSafeNormal();
+			const FVector BoneUp = FVector::Cross(Direction, Side).GetSafeNormal();
+
+			const float Width = std::min(Length * 0.13f, MeshSize * 0.018f);
+			const FVector Center = Tail + Axis * 0.25f;
+			const FVector Ring[4] = {
+				Center + Side * Width,
+				Center + BoneUp * Width,
+				Center - Side * Width,
+				Center - BoneUp * Width
+			};
+
+			for (int32 Edge = 0; Edge < 4; ++Edge)
+			{
+				Lines.AddLine(Tail, Ring[Edge], BoneColor);
+				Lines.AddLine(Ring[Edge], Head, BoneColor);
+				Lines.AddLine(Ring[Edge], Ring[(Edge + 1) % 4], BoneColor);
+			}
 		}
 	}
 
@@ -620,7 +785,8 @@ void FSkeletalMeshViewerPanel::OnBoneTransformModified(int32 BoneIndex, const FT
 
 bool FSkeletalMeshViewerPanel::PickBone(const FRay& Ray)
 {
-	if (!CurrentMesh || !MeshComponent) return false;
+	if (!CurrentMesh || !MeshComponent || BoneDrawMode == EBoneDrawMode::None) return false;
+	const TArray<FBoneInfo>& Bones = CurrentMesh->MeshData.Bones;
 	const TArray<FMatrix>& Global = MeshComponent->GetGlobalBoneTransforms();
 	const FMatrix World = MeshComponent->GetWorldMatrix();
 	const float MeshSize = std::max(0.01f, (CurrentMesh->MeshData.AABB.Max - CurrentMesh->MeshData.AABB.Min).Size());
@@ -629,6 +795,21 @@ bool FSkeletalMeshViewerPanel::PickBone(const FRay& Ray)
 	float ClosestDistance = FLT_MAX;
 	for (int32 Bone = 0; Bone < Global.Num(); ++Bone)
 	{
+		if (BoneDrawMode == EBoneDrawMode::SelectedOnly && Bone != SelectedBoneIndex) continue;
+		if (BoneDrawMode == EBoneDrawMode::SelectedAndParents)
+		{
+			bool bIsAncestor = false;
+			for (int32 P = SelectedBoneIndex; P >= 0 && P < Bones.Num(); P = Bones[P].ParentIndex)
+			{
+				if (P == Bone)
+				{
+					bIsAncestor = true;
+					break;
+				}
+			}
+			if (!bIsAncestor) continue;
+		}
+
 		const FVector Head = (Global[Bone] * World).TransformPosition(FVector::ZeroVector);
 		float Distance;
 		if (RayIntersectsSphere(Ray, Head, JointRadius, Distance))

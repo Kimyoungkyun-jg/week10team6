@@ -74,6 +74,7 @@ public:
 	}
 
 	FPrimitiveSceneProxy* GetSceneProxy() const { return SceneProxy; }
+	virtual FPrimitiveSceneProxy* CreateSceneProxy() { return nullptr; }
 
 	void MarkRenderStateDirty() override;
 

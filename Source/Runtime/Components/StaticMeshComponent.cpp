@@ -30,6 +30,12 @@ void UStaticMeshComponent::TickComponent(float DeltaTime)
 	Super::TickComponent(DeltaTime);
 }
 
+FPrimitiveSceneProxy* UStaticMeshComponent::CreateSceneProxy()
+{
+	return new FStaticMeshSceneProxy(this);
+}
+
+
 void UStaticMeshComponent::SetStaticMesh(UStaticMesh* InStaticMesh)
 {
 	if (StaticMesh == InStaticMesh)

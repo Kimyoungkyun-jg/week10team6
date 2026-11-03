@@ -349,27 +349,22 @@ bool FMeshPassProcessor::Build(const TArray<FPrimitiveSceneProxy*>& ShadowMeshes
 
 	for (FPrimitiveSceneProxy* Proxy : ShadowMeshes)
 	{
-		if (!Proxy || !Proxy->GetRenderState())
+		if (!Proxy || !Proxy->GetRenderState() || !Proxy->bCastsShadow)
 		{
 			continue;
 		}
 
-		UStaticMesh* Mesh = Proxy->GetMesh();
-		if (!Mesh || Proxy->GetLODCount() == 0)
+		if (Proxy->GetLODCount() == 0)
 		{
 			continue;
 		}
 
-		if (!Proxy->bCastsShadow) continue;
-
-		// 우선 LOD 0 사용
 		constexpr uint8 LOD = 0;
 		const FCachedMeshLOD& CachedLOD = Proxy->GetLOD(LOD);
-
 		FMeshDrawBatch Batch{};
 		Batch.Pipeline = *Pipeline;
-		Batch.VertexBuffer = Mesh->GetVertexBuffer(LOD);
-		Batch.IndexBuffer = Mesh->GetIndexBuffer(LOD);
+		Batch.VertexBuffer = Proxy->GetVertexBuffer(LOD);
+		Batch.IndexBuffer = Proxy->GetIndexBuffer(LOD);
 		Batch.bUseObjectSlots = false;
 		Batch.bBindViewConstants = true;
 		Batch.ObjectBindingSlot = 2;
@@ -377,7 +372,7 @@ bool FMeshPassProcessor::Build(const TArray<FPrimitiveSceneProxy*>& ShadowMeshes
 
 		if (!Batch.VertexBuffer || !Batch.IndexBuffer)
 		{
-			return false;
+			continue;
 		}
 
 		for (uint32 Index = 0; Index < CachedLOD.NumSections; ++Index)

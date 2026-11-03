@@ -4,6 +4,8 @@
 #include "Render/RenderPacket.h"
 #include "Collision/Ray.h"
 
+#include "Engine/PrimitiveSceneProxy.h"
+
 
 USkeletalMeshComponent::USkeletalMeshComponent()
 {
@@ -190,6 +192,11 @@ void USkeletalMeshComponent::SubmitToRenderQueue(FRenderQueue& RenderQueue, cons
 		Packet.Material = SectionMaterial;
 		RenderQueue.Add(Packet);
 	}
+}
+
+FPrimitiveSceneProxy* USkeletalMeshComponent::CreateSceneProxy()
+{
+	return new FSkeletalMeshSceneProxy(this);
 }
 
 bool USkeletalMeshComponent::LineTraceComponent(const FRay& WorldRay, FHitResult& OutHit)

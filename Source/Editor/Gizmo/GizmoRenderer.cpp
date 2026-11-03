@@ -49,7 +49,7 @@ void FGizmoRenderer::OnRender(
 	const FVector& CameraLocation,
 	const bool bCameraOrthographic)
 {
-	if (!Gizmo.GetTarget())
+	if (!Gizmo.HasTarget())
 		return;
 
 	UStaticMesh* AxisMesh = nullptr;

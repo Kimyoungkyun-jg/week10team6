@@ -24,7 +24,7 @@ void FGizmo::Update(const FRay& MouseRay, const FVector2& MousePos, const FMatri
 	ViewCameraLocation = CameraLocation;
 	bViewCameraOrthographic = bCameraOrthographic;
 
-	if (!Target) // 만약 현재 타겟이 없다면 
+	if (!HasTarget()) // 만약 현재 타겟이 없다면 
 	{
 		HoveredAxis = -1;
 		DraggingAxis = -1;
@@ -245,7 +245,7 @@ void FGizmo::UpdateDrag(const FRay& MouseRay, const FVector2& MousePos)
 	if (DraggingAxis == AXIS_SCREEN && Mode != EGizmoMode::Rotation)
 	{
 		if (Mode == EGizmoMode::Location)
-			Target->SetRelativeLocation(DragStartLocation + (current - DragStartPoint));
+			SetLocation(DragStartLocation + (current - DragStartPoint));
 		else
 		{
 			float dx = MousePos.X - DragStartMousePos.X;
@@ -256,7 +256,7 @@ void FGizmo::UpdateDrag(const FRay& MouseRay, const FVector2& MousePos)
 			if (factor < 0.01f) factor = 0.01f;
 
 			if (!ApplyScaleToLight(factor)) 	// 조명이면 여기서 radius만 변경하고 return
-				Target->SetRelativeScale3D(DragStartScale * factor);
+				SetScale(DragStartScale * factor);
 		}
 		return;
 	}
@@ -271,7 +271,7 @@ void FGizmo::UpdateDrag(const FRay& MouseRay, const FVector2& MousePos)
 
 		FQuat result = delta * start;
 
-		Target->SetRelativeRotation(result.ToFRotator());
+		SetRotation(result.ToFRotator());
 		return;
 	}
 
@@ -279,7 +279,7 @@ void FGizmo::UpdateDrag(const FRay& MouseRay, const FVector2& MousePos)
 	float amount = delta.Dot(DragAxisDirection);
 
 	if (Mode == EGizmoMode::Location)
-		Target->SetRelativeLocation(DragStartLocation + DragAxisDirection * amount);
+		SetLocation(DragStartLocation + DragAxisDirection * amount);
 	else   // Scale
 	{
 		float factor = 1.0f + amount;
@@ -293,7 +293,7 @@ void FGizmo::UpdateDrag(const FRay& MouseRay, const FVector2& MousePos)
 		else if (DraggingAxis == 1) NewScale.Y *= factor;
 		else                        NewScale.Z *= factor;
 
-		Target->SetRelativeScale3D(NewScale);
+		SetScale(NewScale);
 	}
 }
 
@@ -336,9 +336,9 @@ FVector FGizmo::GetAxisDirection(int Axis) const
 	if (Axis < 0 || Axis > 2) return FVector(0, 0, 0);
 	bool bUseLocal = (Space == EGizmoSpace::Local) || (Mode == EGizmoMode::Scale);
 
-	if (bUseLocal && Target)
+	if (bUseLocal && HasTarget())
 	{
-		FMatrix rot = Target->GetRelativeRotation().Quaternion().ToFMatrix();
+		FMatrix rot = GetRotation().Quaternion().ToFMatrix();
 		FVector4 v = rot.TransformVector(AxisDirs[Axis]);
 		return FVector(v.X, v.Y, v.Z).Normalized();
 	}
@@ -354,9 +354,9 @@ FVector FGizmo::GetRenderLocation() const
 // 직교에서는 대상 위치, 원근에서는 카메라 앞 일정 거리로 표시 위치를 정한다.
 FVector FGizmo::GetRenderLocationForView(const FVector& CameraLocation, const bool bCameraOrthographic) const
 {
-	if (!Target) return FVector(0, 0, 0);
+	if (!HasTarget()) return FVector(0, 0, 0);
 
-	FVector PivotLocation = Target->GetWorldLocation();
+	FVector PivotLocation = Target ? Target->GetWorldLocation() : (TargetTransform ? TargetTransform->Location : FVector(0, 0, 0));
 
 	// bounds 합집합 중앙에 기즈모 표시
 	/*if (bUseActorBounds)

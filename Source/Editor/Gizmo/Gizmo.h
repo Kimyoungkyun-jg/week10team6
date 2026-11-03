@@ -32,13 +32,20 @@ public:
 		TargetTransform = nullptr;
 		OnTransformChanged = nullptr;
 	}
-	/*void SetTarget(FTransform* InTransform, std::function<void(const FTransform&)> InOnChanged = nullptr)
+	void SetTarget(FTransform* InTransform, std::function<void(const FTransform&)> InOnChanged = nullptr)
 	{
 		Target = nullptr;
 		TargetTransform = InTransform;
 		OnTransformChanged = InOnChanged;
 		bUseActorBounds = false;
-	}*/
+	}
+	void SetTarget(std::nullptr_t)
+	{
+		Target = nullptr;
+		TargetTransform = nullptr;
+		OnTransformChanged = nullptr;
+		bUseActorBounds = false;
+	}
 	bool HasTarget() const { return Target != nullptr || TargetTransform != nullptr; }
 	USceneComponent* GetTarget() const { return Target; }
 
@@ -73,6 +80,48 @@ public:
 	inline FVector GetLocation() const { return Target ? Target->GetRelativeLocation() : (TargetTransform ? TargetTransform->Location : FVector(0, 0, 0)); }
 	inline FRotator GetRotation() const { return Target ? Target->GetRelativeRotation() : (TargetTransform ? TargetTransform->Rotation : FRotator(0, 0, 0)); }
 	inline FVector GetScale() const { return Target ? Target->GetRelativeScale3D() : (TargetTransform ? TargetTransform->Scale : FVector(1, 1, 1)); }
+
+	inline void SetLocation(const FVector& NewLoc)
+	{
+		if (Target)
+		{
+			Target->SetRelativeLocation(NewLoc);
+		}
+		else if (TargetTransform)
+		{
+			TargetTransform->Location = NewLoc;
+			if (OnTransformChanged)
+				OnTransformChanged(*TargetTransform);
+		}
+	}
+
+	inline void SetRotation(const FRotator& NewRot)
+	{
+		if (Target)
+		{
+			Target->SetRelativeRotation(NewRot);
+		}
+		else if (TargetTransform)
+		{
+			TargetTransform->Rotation = NewRot;
+			if (OnTransformChanged)
+				OnTransformChanged(*TargetTransform);
+		}
+	}
+
+	inline void SetScale(const FVector& NewScale)
+	{
+		if (Target)
+		{
+			Target->SetRelativeScale3D(NewScale);
+		}
+		else if (TargetTransform)
+		{
+			TargetTransform->Scale = NewScale;
+			if (OnTransformChanged)
+				OnTransformChanged(*TargetTransform);
+		}
+	}
 
 	FVector GetRenderLocation() const;
 	// 원근 View에서만 카메라 거리에 맞춰 크기 보정 위치를 구하고 직교 View는 월드 위치를 유지한다.

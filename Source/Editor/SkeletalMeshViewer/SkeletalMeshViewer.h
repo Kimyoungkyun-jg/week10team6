@@ -2,6 +2,7 @@
 
 #include "Editor/EditorUI/EditorPanel.h"
 #include "Editor/Viewports/EditorViewportClient.h"
+#include "Editor/Gizmo/Gizmo.h"
 
 class UWorld;
 class USkeletalMeshComponent;
@@ -22,6 +23,9 @@ struct FSkeletalMeshViewer
 	TArray<TArray<uint32>> Children;
 	int32 SelectedBone = -1;
 
+	FGizmo Gizmo;
+	USceneComponent* BoneGizmoTarget = nullptr;
+
 	ImVec2 ViewSize{ 0.0f, 0.0f };
 };
 
@@ -40,6 +44,7 @@ private:
 	void DrawViewport(FSkeletalMeshViewer& Viewer);
 	void DrawBoneTree(FSkeletalMeshViewer& Viewer);
 	void DrawBoneNode(FSkeletalMeshViewer& Viewer, int32 BoneIndex);
+	void UpdateBoneGizmo(FSkeletalMeshViewer& Viewer, const ImVec2& ViewMin, bool bLeftDown);
 
 	TArray<TUniquePtr<FSkeletalMeshViewer>> Viewers;
 	uint32 NextId = 0;

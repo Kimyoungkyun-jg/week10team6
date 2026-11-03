@@ -714,7 +714,7 @@ void UEditorEngine::RenderViewports()
 		for (const TUniquePtr<FSkeletalMeshViewer>& Viewer : SkeletalMeshViewerPanel->GetViewers())
 		{
 			if (Viewer->bOpen && Viewer->bVisible)
-				RenderPreviewViewport(&Viewer->Client, Viewer->World, nullptr);
+				RenderPreviewViewport(&Viewer->Client, Viewer->World, &Viewer->Gizmo);
 		}
 	}
 }

@@ -47,6 +47,7 @@ private:
 	void DrawViewport(FSkeletalMeshViewer& Viewer);
 	void DrawBoneTree(FSkeletalMeshViewer& Viewer);
 	void DrawBoneNode(FSkeletalMeshViewer& Viewer, int32 BoneIndex);
+	void DrawBoneDetails(FSkeletalMeshViewer& Viewer);
 	int32 DrawSkeleton(FSkeletalMeshViewer& Viewer, const ImVec2& ViewMin, const ImVec2& ViewSize);
 	void SelectBone(FSkeletalMeshViewer& Viewer, int32 BoneIndex);
 	void UpdateBoneGizmo(FSkeletalMeshViewer& Viewer, const ImVec2& ViewMin, bool bLeftDown);

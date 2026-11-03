@@ -9,6 +9,29 @@
 #include "Collision/Ray.h"
 #include "UObject/UObjectGlobals.h"
 
+namespace
+{
+	FTransform DecomposeMatrix(const FMatrix& M)
+	{
+		FTransform Out;
+		Out.Location = FVector(M[3][0], M[3][1], M[3][2]);
+
+		const FVector X(M[0][0], M[0][1], M[0][2]);
+		const FVector Y(M[1][0], M[1][1], M[1][2]);
+		const FVector Z(M[2][0], M[2][1], M[2][2]);
+		
+		Out.Scale = FVector(X.Size(), Y.Size(), Z.Size());
+
+		FMatrix Rotation = FMatrix::Identity;
+		Rotation.SetAxis(0, X.Normalized());
+		Rotation.SetAxis(1, Y.Normalized());
+		Rotation.SetAxis(2, Z.Normalized());
+		Out.Rotation = MatrixToRotator(Rotation);
+
+		return Out;
+	}
+}
+
 FSkeletalMeshViewer::~FSkeletalMeshViewer()
 {
 	delete BoneGizmoTarget;
@@ -94,12 +117,57 @@ void FSkeletalMeshViewerPanel::OnRender()
 			}
 
 			ImGui::BeginChild("Bones", ImVec2(250.0f, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
+			const float DetailsHeight = ImGui::GetFrameHeightWithSpacing() * 6.0f;
+			ImGui::BeginChild("Tree", ImVec2(0.0f, -DetailsHeight));
 			DrawBoneTree(*Viewer);
+			ImGui::EndChild();
+			ImGui::Separator();
+			DrawBoneDetails(*Viewer);
 			ImGui::EndChild();
 			ImGui::SameLine();
 			DrawViewport(*Viewer);
 		}
 		ImGui::End();
+	}
+}
+
+void FSkeletalMeshViewerPanel::DrawBoneDetails(FSkeletalMeshViewer& Viewer)
+{
+	USkeletalMeshComponent* Mesh = Viewer.MeshComponent;
+	if (ImGui::Button("Reset Pose"))
+		Mesh->InitBoneTransforms();
+
+	if (Viewer.SelectedBone < 0)
+	{
+		ImGui::TextDisabled("Select a bone");
+		return;
+	}
+
+	const TArray<FBoneInfo>& Bones = Mesh->GetSkeletalMesh()->MeshData.Bones;
+	const FBoneInfo& Bone = Bones[Viewer.SelectedBone];
+	ImGui::TextUnformatted(Bone.Name.c_str());
+	ImGui::TextDisabled("Parent: %s", Bone.ParentIndex >= 0 ? Bones[Bone.ParentIndex].Name.c_str() : "(root)");
+
+	// 부모 기준 로컬 트랜스폼을 표시
+	FTransform Local = DecomposeMatrix(Mesh->GetBoneTransforms()[Viewer.SelectedBone]);
+	float Euler[3] = { Local.Rotation.Roll, Local.Rotation.Pitch, Local.Rotation.Yaw };
+
+	bool bChanged = false;
+	bChanged |= ImGui::DragFloat3("Location", Local.Location.V, 0.01f);
+	bChanged |= ImGui::DragFloat3("Rotation", Euler, 0.5f);
+	bChanged |= ImGui::DragFloat3("Scale", Local.Scale.V, 0.01f);
+
+	if (bChanged)
+	{
+		Local.Rotation = FRotator(Euler[1], Euler[2], Euler[0]);
+		Mesh->SetBoneTransform(Viewer.SelectedBone, Local.GetLocalMatrix());
+		Mesh->PerformCPUSkinning();
+	}
+
+	if (ImGui::Button("Reset Bone"))
+	{
+		Mesh->SetBoneTransform(Viewer.SelectedBone, Bone.LocalBindPose);
+		Mesh->PerformCPUSkinning();
 	}
 }
 

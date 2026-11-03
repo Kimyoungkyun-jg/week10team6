@@ -26,7 +26,7 @@ public:
 	FGizmo& GetGizmo() { return Gizmo; }
 
 	// 뷰포트 오버레이(본 와이어프레임 & 기즈모) 렌더링
-	void DrawOverlay(FLineBatcher& Lines, FGizmoRenderer& GizmoRenderer, const FMatrix& ViewProj);
+	void DrawOverlay(FLineBatcher& Lines, FGizmoRenderer& GizmoRenderer, const FMatrix& ViewProjection);
 
 	// 메시 설정 & 본 선택
 	void SetSkeletalMesh(USkeletalMesh* InMesh);

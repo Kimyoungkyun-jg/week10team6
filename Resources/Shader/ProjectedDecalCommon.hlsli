@@ -26,7 +26,8 @@ float4 EvaluateProjectedDecal(float3 WorldPosition)
     float2 UV = DecalPosition.yz + 0.5f;
     UV.y = 1.0f - UV.y; // 텍스처 좌표계는 위쪽이 0, 아래쪽이 1
 
-    float4 TextureColor = DecalColorTexture.Sample(DecalSampler, UV);
+    // float4 TextureColor = DecalColorTexture.Sample(DecalSampler, UV);
+    float4 TextureColor = DecalColorTexture.SampleLevel(DecalSampler, UV, 0.0f);
     float3 TextureRGB = TextureColor.rgb;
     
     // 기존 UberLit의 수동 변환 규약과 맞춘다.

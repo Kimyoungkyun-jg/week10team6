@@ -4,6 +4,32 @@
 #include "Render/RenderPacket.h"
 #include "Collision/Ray.h"
 
+namespace
+{
+	// 섞인 Bone Matrix의 0~2열. Affine이므로 3열은 (0,0,0,1)이므로 계산하지 않음
+	using FBlendMatrix = float[4][3];
+
+	// 점 변환 (행 벡터): pxM = x*Row0 + y*Row1 + z*Row2 + Row3
+	inline void TransformPoint(const FBlendMatrix& B, const FVector& P, FVector& Out)
+	{
+		Out.X = P.X * B[0][0] + P.Y * B[1][0] + P.Z * B[2][0] + B[3][0];
+		Out.Y = P.X * B[0][1] + P.Y * B[1][1] + P.Z * B[2][1] + B[3][1];
+		Out.Z = P.X * B[0][2] + P.Y * B[1][2] + P.Z * B[2][2] + B[3][2];
+	}
+
+	// 방향 변환: 이동(Row3) 없이 변환한 뒤 정규화. 너무 짧으면 0.
+	inline void TransformDirection(const FBlendMatrix& B, float X, float Y, float Z, float* Out)
+	{
+		const float RX = X * B[0][0] + Y * B[1][0] + Z * B[2][0];
+		const float RY = X * B[0][1] + Y * B[1][1] + Z * B[2][1];
+		const float RZ = X * B[0][2] + Y * B[1][2] + Z * B[2][2];
+		const float LengthSq = RX * RX + RY * RY + RZ * RZ;
+		const float InvLength = LengthSq > SMALL_NUMBER ? 1.0f / std::sqrt(LengthSq) : 0.0f;
+		Out[0] = RX * InvLength;
+		Out[1] = RY * InvLength;
+		Out[2] = RZ * InvLength;
+	}
+}
 
 USkeletalMeshComponent::USkeletalMeshComponent()
 {
@@ -111,43 +137,45 @@ void USkeletalMeshComponent::PerformCPUSkinning()
 		const FSkeletalVertex& Src = MeshData.SkinnedVertices[v];
 		FVertex& Dst = SkinnedVertices[v];
 
-		FVector BlendedPos(0.0f, 0.0f, 0.0f);
-		FVector BlendedNormal(0.0f, 0.0f, 0.0f);
-		FVector BlendedTangent(0.0f, 0.0f, 0.0f);
+		// Bone Influence(최대 4개)의 스키닝 행렬을 가중치로 섞어 행렬 하나로 만든다
+		float B[4][3] = {};
 		float TotalWeight = 0.0f;
-
 		for (int32 i = 0; i < 4; ++i)
 		{
 			int32 BoneIndex = Src.BoneIndices[i];
 			float Weight = Src.BoneWeights[i];
-			if (BoneIndex >= 0 && BoneIndex < BoneCount && Weight > 0.0f)
+			
+			if (BoneIndex < 0 || BoneIndex >= BoneCount || Weight <= 0.0f)
+				continue;
+
+			const FMatrix& S = SkinningMatrices[BoneIndex];
+			for (int32 Row = 0; Row < 4; ++Row)
 			{
-				const FMatrix& SkinningMatrix = SkinningMatrices[BoneIndex];
-				BlendedPos += SkinningMatrix.TransformPosition(Src.Position) * Weight;
-				BlendedNormal += SkinningMatrix.TransformVector(Src.Normal) * Weight;
-				BlendedTangent += SkinningMatrix.TransformVector(FVector(Src.Tangent.X, Src.Tangent.Y, Src.Tangent.Z)) * Weight;
-				TotalWeight += Weight;
+				B[Row][0] += S.M[Row][0] * Weight;
+				B[Row][1] += S.M[Row][1] * Weight;
+				B[Row][2] += S.M[Row][2] * Weight;
 			}
+			TotalWeight += Weight;
 		}
+
+		// Bone Influence가 없으면 단위 행렬 = 바인드 포즈 그대로
 		if (TotalWeight <= 0.0f)
-		{
-			BlendedPos = Src.Position;
-			BlendedNormal = Src.Normal;
-			BlendedTangent = FVector(Src.Tangent.X, Src.Tangent.Y, Src.Tangent.Z);
-		}
-		Dst.Position = BlendedPos;
-		Dst.Normal = BlendedNormal.GetSafeNormal();
-		const FVector Tangent = BlendedTangent.GetSafeNormal();
-		Dst.Tangent = FVector4(Tangent.X, Tangent.Y, Tangent.Z, Src.Tangent.W);
+			B[0][0] = B[1][1] = B[2][2] = 1.0f;
+
+		// 섞은 행렬 하나로 위치, 노멀, 탄젠트를 변환
+		TransformPoint(B, Src.Position, Dst.Position);
+		TransformDirection(B, Src.Normal.X, Src.Normal.Y, Src.Normal.Z, Dst.Normal.V);
+		TransformDirection(B, Src.Tangent.X, Src.Tangent.Y, Src.Tangent.Z, Dst.Tangent.V);
+		Dst.Tangent.W = Src.Tangent.W;
 		Dst.UV = Src.UV;
 		Dst.Color = Src.Color;
 
-		BoundsMin.X = std::min(BoundsMin.X, BlendedPos.X);
-		BoundsMin.Y = std::min(BoundsMin.Y, BlendedPos.Y);
-		BoundsMin.Z = std::min(BoundsMin.Z, BlendedPos.Z);
-		BoundsMax.X = std::max(BoundsMax.X, BlendedPos.X);
-		BoundsMax.Y = std::max(BoundsMax.Y, BlendedPos.Y);
-		BoundsMax.Z = std::max(BoundsMax.Z, BlendedPos.Z);
+		BoundsMin.X = std::min(BoundsMin.X, Dst.Position.X);
+		BoundsMin.Y = std::min(BoundsMin.Y, Dst.Position.Y);
+		BoundsMin.Z = std::min(BoundsMin.Z, Dst.Position.Z);
+		BoundsMax.X = std::max(BoundsMax.X, Dst.Position.X);
+		BoundsMax.Y = std::max(BoundsMax.Y, Dst.Position.Y);
+		BoundsMax.Z = std::max(BoundsMax.Z, Dst.Position.Z);
 	}
 
 	SkinnedBounds.Min = BoundsMin;

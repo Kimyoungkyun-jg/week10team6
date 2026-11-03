@@ -183,6 +183,19 @@ void FContentDrawerPanel::OnRender()
 					{
 						OnOpenWidget(PathString);
 					}
+					else if (Path.extension() == ".fbx" && OnOpenSkeletalMesh)
+					{
+						OnOpenSkeletalMesh(PathString);
+					}
+					else if (Path.extension() == ".bin" && OnOpenSkeletalMesh)
+					{
+						char Magic[4] = { 0 };
+						std::ifstream File(Path, std::ios::binary);
+						if (File.read(Magic, 4) && std::memcmp(Magic, "SKBK", 4) == 0)
+						{
+							OnOpenSkeletalMesh(PathString);
+						}
+					}
 				}
 				// 파일 이름 표시
 				ImGui::TextWrapped("%s", FilenameString.c_str());

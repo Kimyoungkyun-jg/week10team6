@@ -177,10 +177,12 @@ bool UEditorEngine::Init()
 	PoseRetargetPanel->SetOpen(false);
 
 	SkeletalMeshViewerPanel = EditorUI->AddEditorPanel<FSkeletalMeshViewerPanel>();
-	SkeletalMeshViewerPanel->SetOpen(true);
+	SkeletalMeshViewerPanel->SetOpen(false);
 
 	ContentDrawerPanel->SetCreateWidgetCallback([this](const FString& Path) { UIEditorPanel->NewAsset(Path); });
 	ContentDrawerPanel->SetOpenWidgetCallback([this](const FString& Path) { UIEditorPanel->OpenAsset(Path); });
+
+	ContentDrawerPanel->SetOpenSkeletalMeshCallback([this](const FString& Path) { SkeletalMeshViewerPanel->OpenAsset(Path); });
 
 	Outline = MakeUnique<FOutline>();
 

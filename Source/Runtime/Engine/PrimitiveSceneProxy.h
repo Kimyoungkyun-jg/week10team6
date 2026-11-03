@@ -7,6 +7,7 @@ class FScene;
 class UPrimitiveComponent;
 class UStaticMeshComponent;
 class USkeletalMeshComponent;
+class UBillboardComponent;
 class UStaticMesh;
 class USkeletalMesh;
 class UMaterial;
@@ -102,4 +103,14 @@ public:
 
 private:
 	USkeletalMesh* SkeletalMesh = nullptr;
+};
+
+class FBillboardSceneProxy : public FPrimitiveSceneProxy
+{
+public:
+	explicit FBillboardSceneProxy(UBillboardComponent* InComponent);
+	virtual ~FBillboardSceneProxy() override = default;
+	virtual void UpdateRenderState() override;
+	virtual FVertexBuffer* GetVertexBuffer(uint8 LOD = 0) const override;
+	virtual FIndexBuffer* GetIndexBuffer(uint8 LOD = 0) const override;
 };

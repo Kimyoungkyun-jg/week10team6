@@ -43,6 +43,8 @@ public:
 	void SetSkeletalMesh(USkeletalMesh* InMesh);
 	void SelectBone(int32 BoneIndex);
 
+	void OpenAsset(const FString& AssetPath);
+
 private:
 	void DrawHierarchyTree();
 	void DrawViewport();
@@ -84,7 +86,7 @@ private:
 	FTransform SelectedBoneTransform;
 
 	// 표시 옵션
-	EBoneDrawMode BoneDrawMode = EBoneDrawMode::AllHierarchy;
+	EBoneDrawMode BoneDrawMode = EBoneDrawMode::SelectedOnly;
 	bool bShowMesh = true;
 	UTexture2D* ShowFlagsIcon = nullptr;
 	// 초기 레이아웃 설정 값

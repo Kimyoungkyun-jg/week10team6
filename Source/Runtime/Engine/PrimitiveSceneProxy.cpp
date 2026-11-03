@@ -3,6 +3,7 @@
 #include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/BillboardComponent.h"
 #include "Render/Mesh.h"
 #include "Render/SkeletalMesh.h"
 #include "Engine/Scene.h"
@@ -186,4 +187,30 @@ FVertexBuffer* FSkeletalMeshSceneProxy::GetVertexBuffer(uint8 LOD) const
 FIndexBuffer* FSkeletalMeshSceneProxy::GetIndexBuffer(uint8 LOD) const
 {
     return SkeletalMesh ? SkeletalMesh->IndexBuffer.get() : nullptr;
+}
+
+FBillboardSceneProxy::FBillboardSceneProxy(UBillboardComponent* InComponent)
+    : FPrimitiveSceneProxy(InComponent)
+{
+}
+
+void FBillboardSceneProxy::UpdateRenderState()
+{
+    RenderState.reset();
+    bVisible = Component->IsShown(false);
+    bHiddenInGame = !Component->IsShown(true);
+    bCastsShadow = Component->bCastShadow;
+    bReceiveShadow = Component->bReceiveShadow;
+}
+
+FVertexBuffer* FBillboardSceneProxy::GetVertexBuffer(uint8 LOD) const
+{
+    UBillboardComponent* Billboard = Cast<UBillboardComponent>(Component);
+    return (Billboard && Billboard->GetQuadMesh()) ? Billboard->GetQuadMesh()->GetVertexBuffer(LOD) : nullptr;
+}
+
+FIndexBuffer* FBillboardSceneProxy::GetIndexBuffer(uint8 LOD) const
+{
+    UBillboardComponent* Billboard = Cast<UBillboardComponent>(Component);
+    return (Billboard && Billboard->GetQuadMesh()) ? Billboard->GetQuadMesh()->GetIndexBuffer(LOD) : nullptr;
 }

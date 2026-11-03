@@ -68,6 +68,8 @@ namespace
 
     void ProcessPolygons(fbxsdk::FbxMesh* Mesh, FFbxInfo& Out, const fbxsdk::FbxAMatrix& MeshMatrix)
     {
+        const fbxsdk::FbxAMatrix NormalMatrix = MeshMatrix.Inverse().Transpose();
+
         int PolygonCount = Mesh->GetPolygonCount();
         Out.Polygons.Reserve(PolygonCount);
 
@@ -134,8 +136,8 @@ namespace
                 fbxsdk::FbxVector4 FbxNorm;
                 if (Mesh->GetPolygonVertexNormal(polyIdx, corner, FbxNorm))
                 {
-                    fbxsdk::FbxVector4 TransformedNorm = MeshMatrix.MultR(FbxNorm);
-                    Corner.Normal = FVector((float)TransformedNorm[0], (float)TransformedNorm[1], (float)TransformedNorm[2]);
+                    fbxsdk::FbxVector4 TransformedNorm = NormalMatrix.MultT(fbxsdk::FbxVector4(FbxNorm[0], FbxNorm[1], FbxNorm[2], 0.0));
+                    Corner.Normal = FVector((float)TransformedNorm[0], (float)TransformedNorm[1], (float)TransformedNorm[2]).GetSafeNormal();
                 }
 
                 // UV 추출

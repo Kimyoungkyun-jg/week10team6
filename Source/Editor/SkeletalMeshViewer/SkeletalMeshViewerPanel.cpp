@@ -148,8 +148,8 @@ bool FSkeletalMeshViewerPanel::Init()
 	{
 		DirLight->GetBillboardComponent()->SetVisibility(false);
 		DirLight->GetArrowComponent()->SetVisibility(false);
-		DirLight->GetLightComponent()->SetIntensity(0.3f);
-		DirLight->GetLightComponent()->SetRelativeRotation(FRotator(10.0f, 30.0f, -140.0f));
+		DirLight->GetLightComponent()->SetIntensity(1.0f);
+		DirLight->GetLightComponent()->SetRelativeRotation(FRotator(40.0f, 160.0f, 0.0f));
 	}
 
 	// 뷰어 전용 스카이박스 초기화 (Assets/SkySphere/SkeletalMeshViewer.hdr)
@@ -831,4 +831,20 @@ bool FSkeletalMeshViewerPanel::PickBone(const FRay& Ray)
 		SelectBone(-1);
 	}
 	return false;
+}
+
+void FSkeletalMeshViewerPanel::OpenAsset(const FString& AssetPath)
+{
+	FString LoadPath = AssetPath;
+	if (LoadPath.size() >= 4 && LoadPath.substr(LoadPath.size() - 4) == ".bin")
+	{
+		LoadPath = LoadPath.substr(0, LoadPath.size() - 4);
+	}
+	USkeletalMesh* Mesh = UAssetManager::LoadFbxSkeletalMesh(LoadPath);
+	if (Mesh)
+	{
+		SetSkeletalMesh(Mesh);
+		SetOpen(true);
+		ImGui::SetWindowFocus(GetPanelName());
+	}
 }

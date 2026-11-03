@@ -716,7 +716,7 @@ void UEditorEngine::RenderViewports()
 		for (const TUniquePtr<FSkeletalMeshViewer>& Viewer : SkeletalMeshViewerPanel->GetViewers())
 		{
 			if (Viewer->bOpen && Viewer->bVisible)
-				RenderPreviewViewport(&Viewer->Client, Viewer->World, &Viewer->Gizmo);
+				RenderPreviewViewport(&Viewer->Client, Viewer->World, &Viewer->Gizmo, Viewer->Skybox.get(), Viewer->bShowGrid);
 		}
 	}
 }
@@ -1036,11 +1036,12 @@ void UEditorEngine::RenderGameFrame(FGameViewportClient* GameClient, const FScen
 
 bool UEditorEngine::RenderScene(FSceneViewTargets& Targets, const FSceneView& SceneView,
 	FSceneRenderer& SceneRenderer, UWorld* TargetWorld, const FSceneRenderOptions& Options,
-	const std::function<void(FSceneOverlayCallbacks&)>& BuildOverlays)
+	const std::function<void(FSceneOverlayCallbacks&)>& BuildOverlays, FSkyboxRenderer* SkyboxOverride)
 {
 	return SceneRenderer.Render(Renderer, Targets, Options,
 		[&](FScenePassCallbacks& Callbacks)
 		{
+			Callbacks.SkyboxOverride = SkyboxOverride;
 			FTexture2D* ColorTarget = Targets.SceneColor.get();
 			FTexture2D* DepthTarget = Targets.Depth.get();
 			if (SceneDepthRenderer)
@@ -1270,7 +1271,7 @@ void UEditorEngine::RenderFrame(FEditorViewportClient* ViewClient,
 	if (!bRendered) return;
 }
 
-void UEditorEngine::RenderPreviewViewport(FEditorViewportClient* PreviewClient, UWorld* PreviewWorld, const FGizmo* PreviewGizmo)
+void UEditorEngine::RenderPreviewViewport(FEditorViewportClient* PreviewClient, UWorld* PreviewWorld, const FGizmo* PreviewGizmo, FSkyboxRenderer* SkyboxOverride, bool bDrawGrid)
 {
 	if (!PreviewClient || !PreviewWorld || PreviewClient->GetWidth() == 0 || PreviewClient->GetHeight() == 0)
 		return;
@@ -1286,9 +1287,11 @@ void UEditorEngine::RenderPreviewViewport(FEditorViewportClient* PreviewClient, 
 	SceneRenderer.InitViews(Renderer, Options);
 
 	FSceneViewTargets& Targets = PreviewClient->GetViewTargets();
-	RenderScene(Targets, SceneView, SceneRenderer, PreviewWorld, Options, [this, &SceneView, &Targets, PreviewGizmo](FSceneOverlayCallbacks& Overlays)
+	RenderScene(Targets, SceneView, SceneRenderer, PreviewWorld, Options, [this, &SceneView, &Targets, PreviewGizmo, bDrawGrid](FSceneOverlayCallbacks& Overlays)
 		{
-			const FViewportSettings ViewportSetting{ 0, 0, Targets.SceneColor->GetWidth(), Targets.SceneColor->GetHeight(), 0.0f, 1.0f };
+			if (bDrawGrid)
+			{
+				const FViewportSettings ViewportSetting{ 0, 0, Targets.SceneColor->GetWidth(), Targets.SceneColor->GetHeight(), 0.0f, 1.0f };
 			Overlays.EditorGrid = [this, &SceneView, ViewportSetting]
 				{
 					GridRenderer->OnRenderBatchGrid(
@@ -1301,6 +1304,7 @@ void UEditorEngine::RenderPreviewViewport(FEditorViewportClient* PreviewClient, 
 						ViewportSetting
 					);
 				};
+			}
 
 			if (PreviewGizmo && PreviewGizmo->GetTarget())
 			{
@@ -1314,8 +1318,8 @@ void UEditorEngine::RenderPreviewViewport(FEditorViewportClient* PreviewClient, 
 						);
 					};
 			}
-		}
-	);
+		},
+		SkyboxOverride);
 }
 
 // View Texture가 포함된 UI를 Swapchain 백버퍼에 합성한다. Present는 FEngineLoop가 한다.

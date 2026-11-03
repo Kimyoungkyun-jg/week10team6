@@ -364,8 +364,7 @@ bool FMeshPassProcessor::Build(const TArray<FPrimitiveSceneProxy*>& ShadowMeshes
 			continue;
 		}
 
-		UStaticMesh* Mesh = Proxy->GetMesh();
-		if (!Mesh || Proxy->GetLODCount() == 0)
+		if (Proxy->GetLODCount() == 0)
 		{
 			continue;
 		}
@@ -378,8 +377,8 @@ bool FMeshPassProcessor::Build(const TArray<FPrimitiveSceneProxy*>& ShadowMeshes
 
 		FMeshDrawBatch Batch{};
 		Batch.Pipeline = *Pipeline;
-		Batch.VertexBuffer = Mesh->GetVertexBuffer(LOD);
-		Batch.IndexBuffer = Mesh->GetIndexBuffer(LOD);
+		Batch.VertexBuffer = Proxy->GetVertexBuffer(LOD);
+		Batch.IndexBuffer = Proxy->GetIndexBuffer(LOD);
 		Batch.bUseObjectSlots = false;
 		Batch.bBindViewConstants = true;
 		Batch.ObjectBindingSlot = 2;
@@ -387,7 +386,7 @@ bool FMeshPassProcessor::Build(const TArray<FPrimitiveSceneProxy*>& ShadowMeshes
 
 		if (!Batch.VertexBuffer || !Batch.IndexBuffer)
 		{
-			return false;
+			continue;
 		}
 
 		for (uint32 Index = 0; Index < CachedLOD.NumSections; ++Index)

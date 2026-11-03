@@ -3,6 +3,7 @@
 #include "Render/RenderCommand.h"
 #include "Render/RenderPacket.h"
 #include "Collision/Ray.h"
+#include "Engine/PrimitiveSceneProxy.h"
 
 namespace
 {
@@ -276,6 +277,11 @@ FBox USkeletalMeshComponent::CalcLocalBounds() const
 	if (SkeletalMesh && !SkinningMatrices.IsEmpty() && (bSkinningMatricesDirty || AppliedMode != SkinningMode))
 		const_cast<USkeletalMeshComponent*>(this)->UpdateSkinning();
 	return SkeletalMesh ? SkinnedBounds : Super::CalcLocalBounds();
+}
+
+FPrimitiveSceneProxy* USkeletalMeshComponent::CreateSceneProxy()
+{
+	return new FSkeletalMeshSceneProxy(this);
 }
 
 void USkeletalMeshComponent::SubmitToRenderQueue(FRenderQueue& RenderQueue, const FViewContext& ViewContext)

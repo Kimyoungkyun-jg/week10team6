@@ -44,6 +44,8 @@ public:
 
 	virtual const FStaticMeshData* GetMeshData() const override { return QuadMesh ? &QuadMesh->GetMeshData() : nullptr; }
 	virtual FBox CalcLocalBounds() const override;
+	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
+	UStaticMesh* GetQuadMesh() const { return QuadMesh; }
 
 	void GetWorldTransformedMatrix(FMatrix* OutWorldMatrix) const;
 	// 뷰 컨텍스트 기준 월드 행렬로 Billboard 렌더 패킷을 제출한다.

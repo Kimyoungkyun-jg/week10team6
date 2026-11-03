@@ -32,6 +32,9 @@ public:
 
 	virtual void SubmitToRenderQueue(FRenderQueue& RenderQueue, const FViewContext& ViewContext) override;
 
+	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
+	FVertexBuffer* GetSkinnedVertexBuffer() const { return SkinnedVertexBuffer.get(); }
+
 	virtual bool LineTraceComponent(const FRay& WorldRay, FHitResult& OutHit) override;
 	virtual bool LineTraceComponentLocal(const FRay& LocalRay, float& OutT) override;
 private:

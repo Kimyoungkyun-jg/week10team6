@@ -67,7 +67,7 @@ public:
 	// 뷰포트 하나의 씬과 에디터 요소를 렌더링한다.
 	void RenderFrame(FEditorViewportClient* ViewClient, const FSceneView& SceneView, const FSceneRenderOptions& RenderOptions, FSceneRenderer& SceneRenderer, UWorld* TargetWorld, const bool bIsPIE);
 	// FBX Viewer용 뷰포트 화면을 렌더링한다.
-	void RenderPreviewViewport(FEditorViewportClient* PreviewClient, UWorld* PreviewWorld, const FGizmo* PreviewGizmo);
+	void RenderPreviewViewport(FEditorViewportClient* PreviewClient, UWorld* PreviewWorld, const FGizmo* PreviewGizmo, class FSkyboxRenderer* SkyboxOverride = nullptr, bool bDrawGrid = false);
 	// 게임 뷰포트 화면을 렌더링한다.
 	void RenderGameFrame(FGameViewportClient* GameClient, const FSceneView& SceneView, const FSceneRenderOptions& RenderOptions, FSceneRenderer& SceneRenderer, bool bIsSIEMode = false);
 	// 네 View 결과와 ImGui를 메인 Swapchain 백버퍼에 합성한다. Present는 FEngineLoop가 한다.
@@ -133,7 +133,8 @@ private:
 
 	bool RenderScene(FSceneViewTargets& Targets, const FSceneView& SceneView,
 		FSceneRenderer& SceneRenderer, UWorld* TargetWorld, const FSceneRenderOptions& Options,
-		const std::function<void(FSceneOverlayCallbacks&)>& BuildOverlays);
+		const std::function<void(FSceneOverlayCallbacks&)>& BuildOverlays,
+		class FSkyboxRenderer* SkyboxOverride = nullptr);
 	void RenderActorUUIDs(const FSceneView& View);
 
 	FWorldContext& GetEditorWorldContext();

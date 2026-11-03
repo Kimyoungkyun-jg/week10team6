@@ -1,4 +1,4 @@
-﻿#include "EnginePCH.h"
+#include "EnginePCH.h"
 #include "Render/SceneRenderer.h"
 #include "Render/Renderer.h"
 #include "Render/SceneLightResources.h"
@@ -1128,7 +1128,8 @@ bool FSceneRenderer::Render(FRenderer* Renderer, FSceneViewTargets& Targets, con
 	if (ExtraPasses) ExtraPasses(Callbacks);
 
 	FRenderGraphBuilder Graph;
-	if (!AddViewportPasses(Graph, Renderer, Targets, Options, Renderer->GetSkybox(), Callbacks) ||
+	FSkyboxRenderer* Skybox = Callbacks.SkyboxOverride ? Callbacks.SkyboxOverride : Renderer->GetSkybox();
+	if (!AddViewportPasses(Graph, Renderer, Targets, Options, Skybox, Callbacks) ||
 		!Graph.Execute() || !DidCorePassSucceed() || !DidFXAAPassSucceed())
 		return false;
 	if (bUseFXAA && !Targets.SwapSceneColorAndBind(FXAA->GetOutputTarget()))

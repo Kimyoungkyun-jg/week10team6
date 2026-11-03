@@ -6,6 +6,16 @@
 
 class UWorld;
 class USkeletalMeshComponent;
+class UTexture2D;
+class FSkyboxRenderer;
+
+enum class EBoneDrawMode : uint8
+{
+	AllHierarchy,       // 모든 계층구조
+	SelectedOnly,       // 선택된 본만
+	SelectedAndParents, // 선택된 본과 부모
+	None                // 없음
+};
 
 // FBX 하나를 띄우는 창. 레벨과 섞이지 않도록 월드를 따로 갖는다.
 struct FSkeletalMeshViewer
@@ -29,6 +39,13 @@ struct FSkeletalMeshViewer
 	ImVec2 ViewSize{ 0.0f, 0.0f };
 
 	bool bScrollTreeToSelection = false;
+
+	EBoneDrawMode BoneDrawMode = EBoneDrawMode::AllHierarchy;
+	bool bShowMesh = true;
+	bool bShowGrid = false;
+	float DetailsHeight = 280.0f;
+	UTexture2D* ShowFlagsIcon = nullptr;
+	TUniquePtr<FSkyboxRenderer> Skybox;
 };
 
 class FSkeletalMeshViewerPanel : public IEditorPanel
@@ -45,6 +62,7 @@ public:
 
 private:
 	void DrawViewport(FSkeletalMeshViewer& Viewer);
+	void DrawViewportToolbar(FSkeletalMeshViewer& Viewer);
 	void DrawBoneTree(FSkeletalMeshViewer& Viewer);
 	void DrawBoneNode(FSkeletalMeshViewer& Viewer, int32 BoneIndex);
 	void DrawBoneDetails(FSkeletalMeshViewer& Viewer);

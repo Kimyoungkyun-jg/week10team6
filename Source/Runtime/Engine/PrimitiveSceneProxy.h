@@ -6,26 +6,37 @@
 class FScene;
 class FSceneRenderer;
 class UPrimitiveComponent;
+class UStaticMeshComponent;
+class USkeletalMeshComponent;
+class UBillboardComponent;
 class UStaticMesh;
+class USkeletalMesh;
 class UMaterial;
+class FVertexBuffer;
+class FIndexBuffer;
 
 class FPrimitiveSceneProxy
 {
 public:
 	explicit FPrimitiveSceneProxy(UPrimitiveComponent* InComponent);
-	
-	~FPrimitiveSceneProxy();
-	void UpdateTransform();
-	void UpdateRenderState();
-	void OnMeshRenderDataChanged();
-	void OnMeshDestroyed();
+	virtual ~FPrimitiveSceneProxy();
+
+	virtual void UpdateTransform();
+	virtual void UpdateRenderState() = 0;
+	virtual void OnMeshRenderDataChanged() {}
+	virtual void OnMeshDestroyed() {}
+
+	virtual FVertexBuffer* GetVertexBuffer(uint8 LOD = 0) const = 0;
+	virtual FIndexBuffer* GetIndexBuffer(uint8 LOD = 0) const = 0;
+
+	virtual UStaticMesh* GetMesh() const { return nullptr; }
+	virtual USkeletalMesh* GetSkeletalMesh() const { return nullptr; }
 
 	UPrimitiveComponent* GetComponent() const { return Component; }
 	const FAABB& GetBounds() const { return Bounds; }
 	const FMatrix& GetLocalToWorld() const { return LocalToWorld; }
 	const FMatrix& GetWorldToLocal() const { return WorldToLocal; }
 	const FLODSphere& GetLODSphere() const { return LODSphere; }
-	UStaticMesh* GetMesh() const { return Mesh; }
 	bool IsVisible() const { return bVisible; }
 	bool IsShown(bool bGameView) const { return bVisible && !(bGameView && bHiddenInGame); }
 	uint8 GetLODCount() const { return RenderState ? RenderState->LODCount : 1; }
@@ -41,12 +52,12 @@ public:
 	bool bCastsShadow = true;
 	bool bReceiveShadow = true;
 	bool bReceiveDecal = true;
-private:
+
+protected:
 	friend class FScene;
 	friend class FSceneRenderer;
 	FScene* Scene = nullptr;
 	UPrimitiveComponent* Component = nullptr;
-	UStaticMesh* Mesh = nullptr;
 	TSharedPtr<const FMeshRenderState> RenderState;
 	FMatrix LocalToWorld;
 	FMatrix WorldToLocal;
@@ -57,4 +68,52 @@ private:
 	bool bRenderStateQueued = false;
 	bool bVisible = true;
 	bool bHiddenInGame = false;
+};
+
+class FStaticMeshSceneProxy : public FPrimitiveSceneProxy
+{
+public:
+	explicit FStaticMeshSceneProxy(UStaticMeshComponent* InComponent);
+	virtual ~FStaticMeshSceneProxy() override;
+
+	virtual void UpdateTransform() override;
+	virtual void UpdateRenderState() override;
+	virtual void OnMeshRenderDataChanged() override;
+	virtual void OnMeshDestroyed() override;
+
+	virtual FVertexBuffer* GetVertexBuffer(uint8 LOD = 0) const override;
+	virtual FIndexBuffer* GetIndexBuffer(uint8 LOD = 0) const override;
+	virtual UStaticMesh* GetMesh() const override { return Mesh; }
+
+private:
+	UStaticMesh* Mesh = nullptr;
+};
+
+class FSkeletalMeshSceneProxy : public FPrimitiveSceneProxy
+{
+public:
+	explicit FSkeletalMeshSceneProxy(USkeletalMeshComponent* InComponent);
+	virtual ~FSkeletalMeshSceneProxy() override;
+
+	virtual void UpdateTransform() override;
+	virtual void UpdateRenderState() override;
+	virtual void OnMeshRenderDataChanged() override;
+	virtual void OnMeshDestroyed() override;
+
+	virtual FVertexBuffer* GetVertexBuffer(uint8 LOD = 0) const override;
+	virtual FIndexBuffer* GetIndexBuffer(uint8 LOD = 0) const override;
+	virtual USkeletalMesh* GetSkeletalMesh() const override { return SkeletalMesh; }
+
+private:
+	USkeletalMesh* SkeletalMesh = nullptr;
+};
+
+class FBillboardSceneProxy : public FPrimitiveSceneProxy
+{
+public:
+	explicit FBillboardSceneProxy(UBillboardComponent* InComponent);
+	virtual ~FBillboardSceneProxy() override = default;
+	virtual void UpdateRenderState() override;
+	virtual FVertexBuffer* GetVertexBuffer(uint8 LOD = 0) const override;
+	virtual FIndexBuffer* GetIndexBuffer(uint8 LOD = 0) const override;
 };

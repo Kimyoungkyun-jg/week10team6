@@ -24,6 +24,10 @@ enum class EDepthStencilState : uint8
 	AlwaysWrite,
 
 	DecalEqualReadOnly,
+	DecalReceiverWrite,	// 깊이 쓰기, 통과 시 수신 비트 교체
+	DecalReceiverTest,	// 깊이 사용 안함, 수신 비트 검사만
+	DecalVolumeGreaterEqual,
+	DecalVolumeGreaterEqualReceiver,
 
 	Count
 };
@@ -60,3 +64,9 @@ enum class ESamplerState : uint8
 
 	Count
 };
+
+namespace StencilBits
+{
+	inline constexpr uint8 Outline = 0x01;
+	inline constexpr uint8 ReceiveDecal = 0x80;
+}

@@ -8,6 +8,7 @@
 #include "Render/SceneRenderOptions.h"
 #include "Render/RenderGraph/RenderGraph.h"
 #include "Render/Decal/ProjectedDecal.h"
+#include "Render/Decal/DecalMeshDrawList.h"
 
 class UWorld;
 class FScene;
@@ -125,6 +126,8 @@ private:
 	// Details 미리보기·캐스케이드 경계 선·stat이 읽는 LightShadows, CascadeShadowDistances도 여기서 채운다.
 	void FinalizeShadowLights(const FSceneRenderOptions& Options);
 
+	void BuildProjectedDecalMeshDrawLists();
+
 	// 이번 프레임에 그림자를 Projection할 광원. Deferred는 이 순서대로 광원마다 마스크를 만들어 더한다.
 	struct FShadowedLight
 	{
@@ -134,6 +137,7 @@ private:
 	};
 	TArray<FShadowedLight> ShadowedLights;
 	TArray<FProjectedDecalRenderData> VisibleDecals;
+	TArray<FProjectedDecalMeshDrawList> MeshDecalDrawLists;
 
 	bool RenderHeightFog(FRenderer* Renderer, FTexture2D* DepthTarget, FTexture2D* ColorTarget);
 	void RenderSceneText(FRenderer* Renderer);
@@ -145,6 +149,7 @@ private:
 	bool bLightUploadSucceeded = false;
 	bool bTilesBuilt = false;
 	TArray<FMeshDrawBatch> ForwardBatches;
+	TArray<FMeshDrawBatch> DecalReceiverBatches;
 	FViewContext CachedViewContext;
 	bool bCorePassSucceeded = true;
 	bool bFXAAPassSucceeded = true;

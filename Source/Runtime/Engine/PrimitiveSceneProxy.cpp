@@ -4,9 +4,13 @@
 #include "Components/StaticMeshComponent.h"
 #include "Render/Mesh.h"
 #include "Engine/Scene.h"
+#include "Render/SceneRenderer.h"
 
 FPrimitiveSceneProxy::FPrimitiveSceneProxy(UPrimitiveComponent* InComponent)
-    : Component(InComponent), bCastsShadow(InComponent->bCastShadow), bReceiveShadow(InComponent->bReceiveShadow) 
+    : Component(InComponent)
+    , bCastsShadow(InComponent->bCastShadow)
+    , bReceiveShadow(InComponent->bReceiveShadow) 
+	, bReceiveDecal(InComponent->bReceiveDecal)
 {
 }
 
@@ -48,6 +52,7 @@ void FPrimitiveSceneProxy::UpdateRenderState()
     bHiddenInGame = !Component->IsShown(true);
     bCastsShadow = Component->bCastShadow;
     bReceiveShadow = Component->bReceiveShadow;
+	bReceiveDecal = Component->bReceiveDecal;
     UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component);
     if (StaticMeshComponent) Mesh = StaticMeshComponent->GetStaticMesh();
     if (Mesh != PreviousMesh)

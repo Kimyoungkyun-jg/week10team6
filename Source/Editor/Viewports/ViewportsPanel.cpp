@@ -605,6 +605,11 @@ void FViewportsPanel::DrawStatOverlay(ImDrawList* DrawList, const ImVec2& ViewMi
 			AddCpuLine("Gather", DecalStats.GatherHistory);
 			AddCpuLine("Sort", DecalStats.SortHistory);
 			AddCpuLine("Submit", DecalStats.SubmitHistory);
+			if (Frame.Method == EDecalRenderMethod::MeshRerendering)
+			{
+				AddCpuLine("Receiver Selection", DecalStats.ReceiverSelectionHistory);
+			}
+
 
 			ProfileLines.Add({
 				"Decal GPU incl. Clear (ms)",
@@ -680,6 +685,82 @@ void FViewportsPanel::DrawStatOverlay(ImDrawList* DrawList, const ImVec2& ViewMi
 					FGpuProfiler::Get().GetErrorCount()),
 				ValueColor
 				});
+
+			Lines.Add({
+				std::format(
+					"  View Frustum Rejected: {}",
+					Frame.ViewFrustumRejectedDecals),
+				ValueColor
+				});
+
+			if (Frame.Method == EDecalRenderMethod::MeshRerendering)
+			{
+				Lines.Add({
+					std::format(
+						"  BVH Bounds Tests: {}",
+						Frame.MeshBVHBoundsTests),
+					ValueColor
+					});
+
+				Lines.Add({
+					std::format(
+						"  BVH Proxy Candidates: {}",
+						Frame.MeshBVHProxyCandidates),
+					ValueColor
+					});
+
+				Lines.Add({
+					std::format(
+						"  Refine Rejected Proxies: {}",
+						Frame.MeshRefineRejectedProxies),
+					ValueColor
+					});
+
+				Lines.Add({
+					std::format(
+						"  Matched Items: {}",
+						Frame.MeshMatchedItems),
+					ValueColor
+					});
+
+				Lines.Add({
+					std::format(
+						"  Fallback Items: {}",
+						Frame.MeshFallbackItems),
+					ValueColor
+					});
+
+				Lines.Add({
+					std::format(
+						"  No Receiver Decals: {}",
+						Frame.MeshNoReceiverDecals),
+					ValueColor
+					});
+			}
+			else if (Frame.Method == EDecalRenderMethod::DepthReconstruction)
+			{
+				Lines.Add({
+					std::format(
+						"  Volume / Far Fallback: {} / {}",
+						Frame.VolumeDrawCalls,
+						Frame.FarFallbackDrawCalls),
+					ValueColor
+					});
+
+				Lines.Add({
+					std::format(
+						"  Frustum Rejected: {}",
+						Frame.FrustumRejectedDecals),
+					ValueColor
+					});
+
+				Lines.Add({
+					std::format(
+						"  Invalid Geometry: {}",
+						Frame.InvalidGeometryDecals),
+					ValueColor
+					});
+			}
 		}
 	}
 

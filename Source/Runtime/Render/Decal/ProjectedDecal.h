@@ -22,6 +22,13 @@ struct FProjectedDecalRenderData
 
 	// 에셋이 소유하는 텍스처의 비소유 포인터.
 	FTexture2D* ColorTexture = nullptr;
+	FTexture2D* NormalTexture = nullptr;
+
+	float NormalStrength = 1.0f;
+	float NormalOpacity = 1.0f;
+	float NormalEncoding = 0.0f; // 0: 없음/사용 불가, 1: RGB UNorm, 2: BC5 UNorm, 3: BC5 SNorm
+
+	bool bFlipNormalY = false;
 
 	ESamplerState Sampler = ESamplerState::LinearClamp;
 
@@ -41,14 +48,32 @@ struct alignas(16) FProjectedDecalConstants
 	FMatrix WorldToDecal;
 	FVector4 TintOpacity; // rgb: 색상, a: 불투명도
 
-	// X: 수동 sRGB 디코딩 여부, YZW: 예약
+
+
+	// X: 수동 sRGB 디코딩
+	// Y: 노말 인코딩
+	// Z: 노말 Y 반전
+	// W: 노말 Strength
 	FVector4 TextureParams;
+
+	FVector4 NormalTangent;
+	FVector4 NormalBitangent;
+	FVector4 NormalDirection;
+
+	// X: NormalOpacity
+	// YZW: 예약
+	FVector4 NormalParams;
 };
 
 struct alignas(16) FProjectedDecalDepthViewConstants
 {
 	FMatrix InverseViewProjection;
 	FVector4 ViewportSize;
+};
+
+struct alignas(16) FProjectedDecalVolumeConstants
+{
+	FMatrix DecalToClip;
 };
 
 // 양수 스케일만 허용한다.
@@ -84,7 +109,59 @@ inline FProjectedDecalConstants MakeProjectedDecalConstants(
 	Constants.TintOpacity = Data.TintOpacity;
 	Constants.TextureParams = FVector4(
 		Data.bDecodeSRGB ? 1.0f : 0.0f,
-		0.0f, 0.0f, 0.0f);
+		Data.NormalEncoding, 
+		Data.bFlipNormalY ? 1.0f : 0.0f, 
+		Data.NormalStrength);
+
+	// UV의 U 증가 방향.
+	FVector T = Data.DecalToWorld.TransformVector(
+		FVector(0.0f, 1.0f, 0.0f));
+
+	// UV의 V 증가 방향.
+	FVector B = Data.DecalToWorld.TransformVector(
+		FVector(0.0f, 0.0f, -1.0f));
+
+	bool bValidFrame = false;
+
+	if (FVector::Dot(T, T) > 1e-12f)
+	{
+		T = T.Normalized();
+
+		// 비균등 스케일·부모 변환의 영향을 받더라도
+		// 직교하는 투영 프레임을 만든다.
+		B = B - T * FVector::Dot(T, B);
+
+		if (FVector::Dot(B, B) > 1e-12f)
+		{
+			B = B.Normalized();
+
+			const FVector N =
+				FVector::Cross(T, B).Normalized();
+
+			Constants.NormalTangent =
+				FVector4(T.X, T.Y, T.Z, 0.0f);
+
+			Constants.NormalBitangent =
+				FVector4(B.X, B.Y, B.Z, 0.0f);
+
+			Constants.NormalDirection =
+				FVector4(N.X, N.Y, N.Z, 0.0f);
+
+			bValidFrame = true;
+		}
+	}
+
+	const bool bUseNormal =
+		bValidFrame &&
+		!Data.bUnlit &&
+		Data.NormalTexture &&
+		Data.NormalEncoding > 0.0f;
+
+	Constants.NormalParams = FVector4(
+		bUseNormal ? Data.NormalOpacity : 0.0f,
+		0.0f,
+		0.0f,
+		0.0f);
 
 	return Constants;
 }

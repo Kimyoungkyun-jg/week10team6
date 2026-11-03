@@ -7,6 +7,7 @@
 #include "Render/LineBatcher.h"
 #include "Render/Material.h"
 #include "Render/Texture2D.h"
+#include "Render/NormalMapUtils.h"
 #include "UObject/UObjectIterator.h"
 #include "GameFramework/Actor.h"
 
@@ -108,6 +109,35 @@ bool UDecalComponent::TryGetRenderData(
 		Opacity);
 
 	Data.ColorTexture = Texture;
+
+	UTexture2D* NormalAsset =
+		DecalMaterial->Textures.Num() > 1
+		? DecalMaterial->Textures[1]
+		: nullptr;
+
+	FTexture2D* NormalResource =
+		NormalAsset ? NormalAsset->GetResource() : nullptr;
+
+	Data.NormalEncoding =
+		NormalMapUtils::GetEncoding(NormalResource);
+
+	Data.NormalTexture =
+		Data.NormalEncoding > 0.0f
+		? NormalResource
+		: nullptr;
+
+	Data.NormalStrength =
+		std::isfinite(NormalStrength)
+		? std::max(0.0f, NormalStrength)
+		: 0.0f;
+
+	Data.NormalOpacity =
+		std::isfinite(NormalOpacity)
+		? std::clamp(NormalOpacity, 0.0f, 1.0f)
+		: 0.0f;
+
+	Data.bFlipNormalY = DecalMaterial->bFlipNormalY;
+
 	Data.Sampler = DecalMaterial->SamplerState;
 
 	// 일반 색상 샘플링에 비교 샘플러는 사용하지 않는다.

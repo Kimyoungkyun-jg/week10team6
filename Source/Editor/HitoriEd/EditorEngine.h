@@ -30,6 +30,7 @@
 #include "Editor/ContentDrawer/ContentDrawerPanel.h"
 #include "Editor/UIEditor/UIEditorPanel.h"
 #include "Editor/SkeletalRetarget/PoseRetargetPanel.h"
+#include "Editor/SkeletalMeshViewer/SkeletalMeshViewer.h"
 
 #include "Editor/Rendering/Outline.h"
 #include "Editor/Rendering/OutLineRenderer.h"
@@ -65,6 +66,8 @@ public:
 	void UpdateGizmoAndPicking();
 	// 뷰포트 하나의 씬과 에디터 요소를 렌더링한다.
 	void RenderFrame(FEditorViewportClient* ViewClient, const FSceneView& SceneView, const FSceneRenderOptions& RenderOptions, FSceneRenderer& SceneRenderer, UWorld* TargetWorld, const bool bIsPIE);
+	// FBX Viewer용 뷰포트 화면을 렌더링한다.
+	void RenderPreviewViewport(FEditorViewportClient* PreviewClient, UWorld* PreviewWorld, const FGizmo* PreviewGizmo);
 	// 게임 뷰포트 화면을 렌더링한다.
 	void RenderGameFrame(FGameViewportClient* GameClient, const FSceneView& SceneView, const FSceneRenderOptions& RenderOptions, FSceneRenderer& SceneRenderer, bool bIsSIEMode = false);
 	// 네 View 결과와 ImGui를 메인 Swapchain 백버퍼에 합성한다. Present는 FEngineLoop가 한다.
@@ -179,6 +182,7 @@ private:
 	FContentDrawerPanel* ContentDrawerPanel = nullptr;
 	FUIEditorPanel* UIEditorPanel = nullptr;
 	FPoseRetargetPanel* PoseRetargetPanel = nullptr;
+	FSkeletalMeshViewerPanel* SkeletalMeshViewerPanel = nullptr;
 
 	UWorld* EditorWorld = nullptr;
 	UWorld* PlayWorld = nullptr;

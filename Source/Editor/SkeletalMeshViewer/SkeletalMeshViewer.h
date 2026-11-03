@@ -1,0 +1,58 @@
+#pragma once
+
+#include "Editor/EditorUI/EditorPanel.h"
+#include "Editor/Viewports/EditorViewportClient.h"
+#include "Editor/Gizmo/Gizmo.h"
+
+class UWorld;
+class USkeletalMeshComponent;
+
+// FBX 하나를 띄우는 창. 레벨과 섞이지 않도록 월드를 따로 갖는다.
+struct FSkeletalMeshViewer
+{
+	~FSkeletalMeshViewer();
+
+	FString Path;
+	uint32 Id = 0;
+	UWorld* World = nullptr;
+	USkeletalMeshComponent* MeshComponent = nullptr;
+	FEditorViewportClient Client;
+	bool bOpen = true;
+	bool bVisible = false;
+
+	TArray<TArray<uint32>> Children;
+	int32 SelectedBone = -1;
+
+	FGizmo Gizmo;
+	USceneComponent* BoneGizmoTarget = nullptr;
+
+	ImVec2 ViewSize{ 0.0f, 0.0f };
+
+	bool bScrollTreeToSelection = false;
+};
+
+class FSkeletalMeshViewerPanel : public IEditorPanel
+{
+public:
+	bool Init() override { return true; }
+	void Tick(float DeltaTime) override;
+	void OnRender() override;
+	const char* GetPanelName() const override { return "Skeletal Mesh Viewer"; }
+	void OpenFBX(const FString& Path);
+	void Release();
+	const TArray<TUniquePtr<FSkeletalMeshViewer>>& GetViewers() const { return Viewers; }
+	bool HasFocuesdViewer() const { return IsOpen() && bHasFocusedViewer; }
+
+private:
+	void DrawViewport(FSkeletalMeshViewer& Viewer);
+	void DrawBoneTree(FSkeletalMeshViewer& Viewer);
+	void DrawBoneNode(FSkeletalMeshViewer& Viewer, int32 BoneIndex);
+	void DrawBoneDetails(FSkeletalMeshViewer& Viewer);
+	int32 DrawSkeleton(FSkeletalMeshViewer& Viewer, const ImVec2& ViewMin, const ImVec2& ViewSize);
+	void SelectBone(FSkeletalMeshViewer& Viewer, int32 BoneIndex);
+	void UpdateBoneGizmo(FSkeletalMeshViewer& Viewer, const ImVec2& ViewMin, bool bLeftDown);
+
+	TArray<TUniquePtr<FSkeletalMeshViewer>> Viewers;
+	uint32 NextId = 0;
+	bool bHasFocusedViewer = false;
+};

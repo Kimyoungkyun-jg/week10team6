@@ -4,6 +4,7 @@
 #include "Render/PipelineState.h"
 #include "Render/Texture2D.h"
 #include "Render/Decal/ProjectedDecal.h"
+#include "Render/Decal/DecalMeshDrawList.h"
 
 #include <span>
 
@@ -26,6 +27,7 @@ public:
 	bool OnRenderMesh(
 		std::span<const FMeshDrawBatch> ReceiverBatches,
 		std::span<const FProjectedDecalRenderData> Decals,
+		std::span<const FProjectedDecalMeshDrawList> DrawLists,
 		bool bUnlitPass,
 		FDecalFrameStats* Stats = nullptr);
 
@@ -35,8 +37,12 @@ public:
 		uint32 Height,
 		std::span<const FProjectedDecalRenderData> Decals,
 		bool bUnlitPass,
-		FDecalFrameStats* Stats = nullptr);
+		FDecalFrameStats* Stats = nullptr,
+		bool bUseReceiverStencil = false);
 private:
+	bool InitVolumeResources();
+	bool IsVolumeResourcesReady() const;
+
 	// 비소유 포인터.
 	FRenderer* Renderer = nullptr;
 
@@ -46,4 +52,10 @@ private:
 
 	TUniquePtr<FConstantBuffer> ConstantBuffer;
 	TUniquePtr<FConstantBuffer> DepthViewConstantBuffer;
+
+	FPipelineState VolumePipelineState;
+
+	TUniquePtr<FVertexBuffer> VolumeVertexBuffer;
+	TUniquePtr<FIndexBuffer> VolumeIndexBuffer;
+	TUniquePtr<FConstantBuffer> VolumeConstantBuffer;
 };

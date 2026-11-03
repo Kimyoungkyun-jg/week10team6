@@ -183,6 +183,10 @@ void FContentDrawerPanel::OnRender()
 					{
 						OnOpenWidget(PathString);
 					}
+					else if (Path.extension() == ".fbx" && OnOpenSkeletalMesh)
+					{
+						OnOpenSkeletalMesh(PathString);
+					}
 				}
 				// 파일 이름 표시
 				ImGui::TextWrapped("%s", FilenameString.c_str());

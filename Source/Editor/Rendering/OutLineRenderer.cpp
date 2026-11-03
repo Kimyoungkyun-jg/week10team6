@@ -17,6 +17,7 @@ void FOutlineRenderer::Init(FRenderer* InRenderer)
 	MaskPipelineState.RasterizerState = ERasterizerState::SolidNone;
 	MaskPipelineState.BlendState = EBlendState::NoColorWrite;
 	MaskPipelineState.DepthStencilState = EDepthStencilState::StencilMask;
+	MaskPipelineState.StencilRef = StencilBits::Outline;
 
 	// 2패스: 확장 메시를 스텐실이 비어 있는 곳에만 그려 테두리 띠만 남긴다.
 	OutlinePipelineState.Shader = Shader;
@@ -24,6 +25,7 @@ void FOutlineRenderer::Init(FRenderer* InRenderer)
 	OutlinePipelineState.RasterizerState = ERasterizerState::SolidNone;
 	OutlinePipelineState.BlendState = EBlendState::Opaque;
 	OutlinePipelineState.DepthStencilState = EDepthStencilState::StencilOutline;
+	OutlinePipelineState.StencilRef = 0;
 
 	static_assert(sizeof(FOutlineData) == 208, "Outline constant buffer layout mismatch");
 	ConstantBuffer = RenderCommand::CreateConstantBuffer(sizeof(FOutlineData));

@@ -43,7 +43,8 @@ VS_OUT mainVS(VS_IN Input)
     return Output;
 }
 
-float4 mainPS(VS_OUT Input) : SV_Target0
+[earlydepthstencil]
+FDecalOutput mainPS(VS_OUT Input) : SV_Target0
 {
     return EvaluateProjectedDecal(Input.WorldPosition);
 }

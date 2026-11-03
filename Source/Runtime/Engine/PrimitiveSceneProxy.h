@@ -4,6 +4,7 @@
 #include "Render/MeshRenderData.h"
 
 class FScene;
+class FSceneRenderer;
 class UPrimitiveComponent;
 class UStaticMesh;
 class UMaterial;
@@ -39,8 +40,10 @@ public:
 
 	bool bCastsShadow = true;
 	bool bReceiveShadow = true;
+	bool bReceiveDecal = true;
 private:
 	friend class FScene;
+	friend class FSceneRenderer;
 	FScene* Scene = nullptr;
 	UPrimitiveComponent* Component = nullptr;
 	UStaticMesh* Mesh = nullptr;

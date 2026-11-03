@@ -90,8 +90,23 @@ void FRenderer::DrawMeshes(std::span<const FMeshDrawBatch> Batches)
 				EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
 		
 		PreviousTextureCount = static_cast<uint32>(Batch.Textures.Num());
+
+		// BindBatch(Batch)는 Pipeline의 기본 StencilRef를 바인딩한다.
+		uint32 CurrentStencilRef = Batch.Pipeline.StencilRef;
 		for (const FMeshDrawBatch::FItem& Item : Batch.Items)
 		{
+			const uint32 DesiredStencilRef =
+				Item.bOverrideStencilRef
+				? Item.StencilRef
+				: Batch.Pipeline.StencilRef;
+
+			if (DesiredStencilRef != CurrentStencilRef)
+			{
+				RenderCommand::SetDepthStencilState(
+					Batch.Pipeline.DepthStencilState,
+					DesiredStencilRef);
+				CurrentStencilRef = DesiredStencilRef;
+			}
 			BindObject(Batch, Item);
 			RenderCommand::DrawIndexed(Item.IndexCount, Item.StartIndex);
 		}

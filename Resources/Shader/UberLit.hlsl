@@ -3,6 +3,7 @@
 #include "LightData.hlsli"
 #include "LightEvaluation.hlsli"
 #include "LightGridCommon.hlsli"
+#include "NormalMapCommon.hlsli"
 #include "Skinning.hlsli"
 
 // 셰이더 스캐너는 매크로 정의 없이 이 파일을 컴파일하므로 기본 변형에는 Lambert를 쓴다.
@@ -50,6 +51,7 @@ Texture2D<float4> ScreenShadowMask : register(t13);
 // 데칼
 Texture2D<float4> DBufferLit : register(t14);
 Texture2D<float4> DBufferUnlit : register(t15);
+Texture2D<float4> DBufferNormal : register(t16);
 
 cbuffer MaterialParams : register(b2)
 {
@@ -109,17 +111,6 @@ float GetLightShadow(FLightRenderParameters Light, float3 PixelPosition)
 {
     if (Light.ShadowMapChannel == INVALID_SHADOW_CHANNEL || ShadowFlags.x < 0.5f) return 1.0f;
     return ScreenShadowMask.Load(int3(int2(PixelPosition.xy), 0))[Light.ShadowMapChannel];
-}
-
-
-float3 DecodeMapNormal(float3 Sample, float Encoding)
-{
-    if (Encoding > 1.5f)
-    {
-        float2 XY = Encoding > 2.5f ? Sample.xy : Sample.xy * 2.0f - 1.0f;
-        return float3(XY, sqrt(saturate(1.0f - dot(XY, XY))));
-    }
-    return Sample * 2.0f - 1.0f;
 }
 
 // 조명과 World Normal 보기가 같은 노멀맵 해석 및 TBN 변환을 사용한다.
@@ -457,11 +448,36 @@ FUberOutput Uber_PS(VS_OUT Input)
     
     int3 PixelCoord = int3(int2(Input.Position.xy), 0);
     
-    float4 LitDecal = DBufferLit.Load(PixelCoord);
+    bool bReceiveDecal = ShadowFlags.y > 0.5f;
     
-    Albedo = Albedo * (1.0f - LitDecal.a) + LitDecal.rgb;
-    
-    float3 Diffuse;
+    if (bReceiveDecal)
+    {
+        float4 LitDecal = DBufferLit.Load(PixelCoord);
+        
+        Albedo = Albedo * (1.0f - LitDecal.a) + LitDecal.rgb;
+    }
+
+#if LIGHTING_MODEL_LAMBERT || LIGHTING_MODEL_PHONG
+    if (bReceiveDecal)
+    {
+        float4 DecalNormal =
+            DBufferNormal.Load(PixelCoord);
+        
+        float3 Combined =
+            ShadingNormal * (1.0f - DecalNormal.a) +
+            DecalNormal.rgb;
+        
+        float LengthSquared = dot(Combined, Combined);
+        
+        if (LengthSquared > 1.0e-8f)
+        {
+            ShadingNormal = Combined * rsqrt(LengthSquared);
+        }
+
+    }
+#endif
+      
+        float3 Diffuse;
     float3 Specular = 0.0f;
 
 #if LIGHTING_MODEL_GOURAUD
@@ -482,7 +498,10 @@ FUberOutput Uber_PS(VS_OUT Input)
     float3 FinalColor = Albedo * Diffuse + Specular + Emissive.rgb;
     float4 UnlitDecal = DBufferUnlit.Load(PixelCoord);
 
-    FinalColor = FinalColor * (1.0f - UnlitDecal.a) + UnlitDecal.rgb;
+    if (bReceiveDecal)
+    {
+        FinalColor = FinalColor * (1.0f - UnlitDecal.a) + UnlitDecal.rgb;
+    }
 
     Output.LitColor = float4(FinalColor, SurfaceColor.a * BaseColor.a);
     Output.NormalRoughness = float4(ShadingNormal, 0.8f);

@@ -4,6 +4,7 @@
 #include "Render/SceneView.h"
 #include "Render/RenderResourceManager.h"
 #include "Render/Mesh.h"
+#include "Render/NormalMapUtils.h"
 #include "Engine/PrimitiveSceneProxy.h"
 #include "Core/EngineTimer.h"
 #include <algorithm>
@@ -13,13 +14,8 @@ namespace
 {
 	float GetNormalEncoding(UTexture2D* Texture)
 	{
-		if (!Texture || !Texture->GetResource() || !Texture->GetResource()->GetSRV()) return 0.0f;
-		switch (Texture->GetResource()->GetFormat())
-		{
-		case DXGI_FORMAT_BC5_UNORM: return 2.0f;
-		case DXGI_FORMAT_BC5_SNORM: return 3.0f;
-		default: return 1.0f;
-		}
+		return NormalMapUtils::GetEncoding(
+			Texture ? Texture->GetResource() : nullptr);
 	}
 
 	const FMatrix& PacketWorld(const FRenderPacket& Packet)
@@ -225,7 +221,8 @@ namespace
 
 	FMeshDrawBatch::FItem BuildItem(const FMatrix& World, const FSceneView& View,
 		EMeshPassType Pass, uint32 Slot, uint32 StartIndex, uint32 IndexCount,
-		const void* ObjectKey, bool bOccludedByGpu, bool bReceiveShadow)
+		const void* ObjectKey, bool bOccludedByGpu, bool bReceiveShadow, bool bReceiveDecal,
+		const FPrimitiveSceneProxy* Proxy)
 	{
 		FMeshDrawBatch::FItem Item{};
 		Item.ObjectSlot = Slot;
@@ -233,6 +230,9 @@ namespace
 		Item.IndexCount = IndexCount;
 		Item.ObjectKey = ObjectKey;
 		Item.bOccludedByGpu = bOccludedByGpu;
+		Item.bReceiveDecal = bReceiveDecal;
+		Item.Proxy = Proxy;
+
 		if (Pass == EMeshPassType::Forward || Pass == EMeshPassType::WorldNormal)
 		{
 			FForwardObjectConstants Constants{};
@@ -241,12 +241,13 @@ namespace
 			Constants.Projection = View.ProjectionMatrix;
 			Constants.NormalMatrix = World.Inverse().GetTransposed();
 			Constants.ShadowFlags.X = static_cast<float>(bReceiveShadow);
+			Constants.ShadowFlags.Y = static_cast<float>(bReceiveDecal);
 			std::memcpy(Item.ObjectData.data(), &Constants, sizeof(Constants));
 			Item.ObjectDataSize = sizeof(Constants);
 		}
 		else
 		{
-			const FPerObjectConstants Constants = MakePerObjectConstants(World, bReceiveShadow);
+			const FPerObjectConstants Constants = MakePerObjectConstants(World, bReceiveShadow, bReceiveDecal);
 			std::memcpy(Item.ObjectData.data(), &Constants, sizeof(Constants));
 			Item.ObjectDataSize = sizeof(Constants);
 		}
@@ -263,12 +264,14 @@ namespace
 		Item.IndexCount = IndexCount;
 		Item.ObjectKey = ObjectKey;
 		Item.bOccludedByGpu = bOccludedByGpu;
+		Item.bReceiveDecal = true;
 
 		FForwardObjectConstants Constants{};
 		Constants.World = World;
 		Constants.View = View;
 		Constants.Projection = Projection;
 		Constants.NormalMatrix = World.Inverse().GetTransposed();
+		Constants.ShadowFlags.Y = 1.0f; // bReceiveDecal
 		std::memcpy(Item.ObjectData.data(), &Constants, sizeof(Constants));
 		Item.ObjectDataSize = sizeof(Constants);
 		
@@ -302,7 +305,7 @@ bool FMeshPassProcessor::Build(const FSceneView& View, const FRenderQueue& Queue
 
 			for (const FStaticDrawItem& Item : Group->Items)
 				Batch.Items.Add(BuildItem(Item.Proxy->GetLocalToWorld(), View, Pass, Item.Slot,
-					Item.StartIndex, Item.IndexCount, Item.Proxy, Item.bOccludedByGpu != 0, Item.Proxy->bReceiveShadow));
+					Item.StartIndex, Item.IndexCount, Item.Proxy, Item.bOccludedByGpu != 0, Item.Proxy->bReceiveShadow, Item.Proxy->bReceiveDecal, Item.Proxy));
 			Out.Add(std::move(Batch));
 		}
 	}
@@ -336,7 +339,7 @@ bool FMeshPassProcessor::Build(const FSceneView& View, const FRenderQueue& Queue
 		const void* ObjectKey = Packet.Proxy ? static_cast<const void*>(Packet.Proxy) : static_cast<const void*>(&Packet);
 
 		Batch.Items.Add(BuildItem(PacketWorld(Packet), View, Pass, Packet.Slot,
-			Packet.StartIndex, IndexCount, ObjectKey, Packet.bOccludedByGpu, !Packet.Proxy || Packet.Proxy->bReceiveShadow));
+			Packet.StartIndex, IndexCount, ObjectKey, Packet.bOccludedByGpu, !Packet.Proxy || Packet.Proxy->bReceiveShadow, !Packet.Proxy || Packet.Proxy->bReceiveDecal, Packet.Proxy));
 		Out.Add(std::move(Batch));
 	}
 	return true;

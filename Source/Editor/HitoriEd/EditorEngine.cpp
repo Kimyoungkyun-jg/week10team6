@@ -179,6 +179,9 @@ bool UEditorEngine::Init()
 	ContentDrawerPanel->SetCreateWidgetCallback([this](const FString& Path) { UIEditorPanel->NewAsset(Path); });
 	ContentDrawerPanel->SetOpenWidgetCallback([this](const FString& Path) { UIEditorPanel->OpenAsset(Path); });
 
+	SkeletalMeshViewerPanel = EditorUI->AddEditorPanel<FSkeletalMeshViewerPanel>();
+	ContentDrawerPanel->SetOpenSkeletalMeshCallback([this](const FString& Path) { SkeletalMeshViewerPanel->OpenFBX(Path); });
+
 	Outline = MakeUnique<FOutline>();
 
 	SystemFont = UAssetManager::GetAssetByPath<UFont>("Assets/Fonts/Pretendard.json");
@@ -263,6 +266,7 @@ bool UEditorEngine::Init()
 
 	EditorControlsPanel->SetWorld(EditorWorld);
 	EditorControlsPanel->SetIsPlayingQuery([this]() { return IsPlaying(); });
+	EditorControlsPanel->SetSkipGizmoHotkeyQuery([this]() { return SkeletalMeshViewerPanel->HasFocuesdViewer(); });
 	EditorControlsPanel->SetGizmo(Gizmo.get());
 	EditorControlsPanel->SetViewportsPanel(ViewportsPanel);
 
@@ -704,6 +708,15 @@ void UEditorEngine::RenderViewports()
 						PoseRetargetPanel->DrawBones(Index, *LineBatcher, View.ViewProjectionMatrix);
 					};
 				});
+		}
+	}
+
+	if (SkeletalMeshViewerPanel->IsOpen())
+	{
+		for (const TUniquePtr<FSkeletalMeshViewer>& Viewer : SkeletalMeshViewerPanel->GetViewers())
+		{
+			if (Viewer->bOpen && Viewer->bVisible)
+				RenderPreviewViewport(&Viewer->Client, Viewer->World, &Viewer->Gizmo);
 		}
 	}
 }
@@ -1257,6 +1270,54 @@ void UEditorEngine::RenderFrame(FEditorViewportClient* ViewClient,
 	if (!bRendered) return;
 }
 
+void UEditorEngine::RenderPreviewViewport(FEditorViewportClient* PreviewClient, UWorld* PreviewWorld, const FGizmo* PreviewGizmo)
+{
+	if (!PreviewClient || !PreviewWorld || PreviewClient->GetWidth() == 0 || PreviewClient->GetHeight() == 0)
+		return;
+
+	PreviewWorld->GetScene().UpdateAllTransforms();
+
+	FSceneRenderOptions Options;
+	BuildSceneRenderOptions(PreviewClient, false, Options);
+	Options.bDrawPrimitives = true;
+
+	const FSceneView SceneView = PreviewClient->CalcSceneView();
+	FSceneRenderer SceneRenderer(PreviewWorld, SceneView, PreviewClient->GetRenderData());
+	SceneRenderer.InitViews(Renderer, Options);
+
+	FSceneViewTargets& Targets = PreviewClient->GetViewTargets();
+	RenderScene(Targets, SceneView, SceneRenderer, PreviewWorld, Options, [this, &SceneView, &Targets, PreviewGizmo](FSceneOverlayCallbacks& Overlays)
+		{
+			const FViewportSettings ViewportSetting{ 0, 0, Targets.SceneColor->GetWidth(), Targets.SceneColor->GetHeight(), 0.0f, 1.0f };
+			Overlays.EditorGrid = [this, &SceneView, ViewportSetting]
+				{
+					GridRenderer->OnRenderBatchGrid(
+						SceneView.ViewProjectionMatrix,
+						SceneView.ViewLocation,
+						SceneView.ViewForward,
+						EGridPlane::XY,
+						static_cast<float>(SettingsPanel->GetSettings().GridSpacing),
+						SceneView.bIsPerspective,
+						ViewportSetting
+					);
+				};
+
+			if (PreviewGizmo && PreviewGizmo->GetTarget())
+			{
+				Overlays.EditorGizmo = [this, &SceneView, PreviewGizmo]
+					{
+						GizmoRenderer->OnRender(
+							*PreviewGizmo, 
+							SceneView.ViewProjectionMatrix, 
+							SceneView.ViewLocation, 
+							!SceneView.bIsPerspective
+						);
+					};
+			}
+		}
+	);
+}
+
 // View Texture가 포함된 UI를 Swapchain 백버퍼에 합성한다. Present는 FEngineLoop가 한다.
 void UEditorEngine::PresentFrame()
 {
@@ -1289,6 +1350,7 @@ void UEditorEngine::PreExit()
 	// 시퀀서는 에디터 월드 액터를 가리키므로 월드보다 먼저 정리한다
 	if (SequencerPanel) SequencerPanel->Shutdown();
 	if (PoseRetargetPanel) PoseRetargetPanel->Release();
+	if (SkeletalMeshViewerPanel) SkeletalMeshViewerPanel->Release();
 	EditorWorld->ClearWorld();
 	// PIE 창이 열린 채 종료하면 Device가 살아 있을 때 Swapchain과 타깃을 먼저 정리한다.
 	DestroyPIEWindow();

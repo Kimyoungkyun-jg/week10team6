@@ -42,6 +42,7 @@ struct FRenderGraphDepthAttachment // 패스에 필요한 DepthTextrue 핸들
 	float ClearDepth = 1.0f;
 	uint8 ClearStencil = 0;
 	uint32 DSVIndex = 0;
+	bool bReadOnlyDepthStencil = false;
 };
 
 struct FShadowAtlasRect

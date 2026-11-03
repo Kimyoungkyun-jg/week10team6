@@ -19,5 +19,6 @@ ADirectionalLightActor::ADirectionalLightActor()
     ArrowComponent->SetHiddenInDetails(true);
     ArrowComponent->SetCastShadow(false);
     ArrowComponent->SetReceiveShadow(false);
+    ArrowComponent->SetReceiveDecal(false);
 
 }

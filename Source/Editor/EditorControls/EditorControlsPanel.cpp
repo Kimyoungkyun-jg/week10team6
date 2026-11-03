@@ -24,6 +24,10 @@ void FEditorControlsPanel::Tick(float DeltaTime)
 	if (ImGui::GetIO().WantTextInput)
 		return;
 
+	// 다른 창 (fbx 뷰어)이 Spacebar를 쓰는 중이면 Level Gizmo는 건드리지 않음
+	if (SkipGizmoHotkeyQuery && SkipGizmoHotkeyQuery())
+		return;
+
 	if (Gizmo && FInputSystem::IsKeyPressed(EKeyCode::Space))
 	{
 		const int NextMode = (static_cast<int>(Gizmo->GetMode()) + 1) % 3;

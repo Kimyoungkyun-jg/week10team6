@@ -482,6 +482,7 @@ namespace
         }
         for (int Child = 0; Child < Node->GetChildCount(); ++Child)
             CollectAnimationBones(Node->GetChild(Child), CurrentParent, Nodes, Names, Parents);
+    }
     // 정점을 공유해도 되는지 판단하는 키
     // 컨트롤 포인트 (위치, 뼈 가중치) + 노멀 + UV
     // float는 비트 그대로 비교 및 해싱. 같은 fbx 데이터에서 온 값이므로 공유할 꼭짓점은 비트까지 같아야함

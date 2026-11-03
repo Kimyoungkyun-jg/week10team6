@@ -53,7 +53,10 @@ void FSkeletalMeshViewerPanel::OpenFBX(const FString& Path)
 {
 	USkeletalMesh* Mesh = UAssetManager::LoadFbxSkeletalMesh(Path);
 	if (!Mesh)
+	{
+		HTR_LOG(Error, "Failed to open skeletal mesh viewer: {}", Path);
 		return;
+	}
 
 	TUniquePtr<FSkeletalMeshViewer> Viewer = MakeUnique<FSkeletalMeshViewer>();
 	Viewer->Path = Path;
@@ -317,7 +320,7 @@ void FSkeletalMeshViewerPanel::UpdateBoneGizmo(FSkeletalMeshViewer& Viewer, cons
 		return;
 
 	USkeletalMeshComponent* Mesh = Viewer.MeshComponent;
-	const TArray<FMatrix>& Globals = Mesh->GetGlobalBoneTransform(); // 모델 공간
+	const TArray<FMatrix>& Globals = Mesh->GetGlobalBoneTransforms(); // 모델 공간
 	const FMatrix ComponentWorld = Mesh->GetWorldMatrix();
 
 	if (!Viewer.Gizmo.IsUsing())

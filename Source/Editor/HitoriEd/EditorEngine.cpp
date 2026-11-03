@@ -1276,15 +1276,14 @@ void UEditorEngine::RenderPreviewViewport(FEditorViewportClient* PreviewClient, 
 	BuildSceneRenderOptions(PreviewClient, false, Options);
 	Options.bDrawPrimitives = true;
 
-	const FRect Rect{ 0.0f, 0.0f, static_cast<float>(PreviewClient->GetWidth()), static_cast<float>(PreviewClient->GetHeight()) };
-	const FSceneView SceneView = PreviewClient->CalcSceneView(Rect);
+	const FSceneView SceneView = PreviewClient->CalcSceneView();
 	FSceneRenderer SceneRenderer(PreviewWorld, SceneView, PreviewClient->GetRenderData());
 	SceneRenderer.InitViews(Renderer, Options);
 
 	FSceneViewTargets& Targets = PreviewClient->GetViewTargets();
 	RenderScene(Targets, SceneView, SceneRenderer, PreviewWorld, Options, [this, &SceneView, &Targets, PreviewGizmo](FSceneOverlayCallbacks& Overlays)
 		{
-			const FViewportSettings ViewportSetting{ 0, 0, Targets.SceneColor->GetWidth(), Targets.SceneColor->GetHeight(), 0.0f, 1.0 };
+			const FViewportSettings ViewportSetting{ 0, 0, Targets.SceneColor->GetWidth(), Targets.SceneColor->GetHeight(), 0.0f, 1.0f };
 			Overlays.EditorGrid = [this, &SceneView, ViewportSetting]
 				{
 					GridRenderer->OnRenderBatchGrid(
@@ -1310,7 +1309,6 @@ void UEditorEngine::RenderPreviewViewport(FEditorViewportClient* PreviewClient, 
 						);
 					};
 			}
-			Overlays.bClearEditorDepth = true; // Gizmo가 Mesh에 가려지지 않도록
 		}
 	);
 }

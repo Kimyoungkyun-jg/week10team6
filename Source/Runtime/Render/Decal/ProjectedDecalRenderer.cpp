@@ -230,7 +230,8 @@ bool FProjectedDecalRenderer::OnRenderDepth(
 	uint32 Height,
 	std::span<const FProjectedDecalRenderData> Decals,
 	bool bUnlitPass,
-	FDecalFrameStats* Stats)
+	FDecalFrameStats* Stats,
+	bool bUseReceiverStencil)
 {
 	if (Decals.empty())
 		return true;
@@ -254,8 +255,21 @@ bool FProjectedDecalRenderer::OnRenderDepth(
 		&ViewConstants,
 		sizeof(ViewConstants));
 
-	RenderCommand::BindPipelineState(
-		DepthPipelineState);
+	// 파이프라인 바인딩
+	{
+		FPipelineState Pipeline = DepthPipelineState;
+		Pipeline.DepthStencilState =
+			bUseReceiverStencil
+			? EDepthStencilState::DecalReceiverTest
+			: EDepthStencilState::Disabled;
+		Pipeline.StencilRef =
+			bUseReceiverStencil
+			? StencilBits::ReceiveDecal
+			: 0;
+
+		RenderCommand::BindPipelineState(
+			Pipeline);
+	}
 
 	RenderCommand::BindVertexBuffer(nullptr);
 	RenderCommand::BindIndexBuffer(nullptr);

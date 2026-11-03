@@ -37,6 +37,7 @@ VS_OUT mainVS(uint VertexID : SV_VertexID)
     return Output;
 }
 
+[earlydepthstencil]
 float4 mainPS(VS_OUT Input) : SV_Target0
 {
     int2 Pixel = int2(Input.Position.xy);
@@ -47,7 +48,7 @@ float4 mainPS(VS_OUT Input) : SV_Target0
     // 현재 엔진의 깊이 Clear 값은 1.
     // 배경은 데칼을 받지 않는다.
     if (Depth >= 1.0f)
-        discard;
+        return float4(0, 0, 0, 0);
     
     // SV_POSITION은 이미 픽셀 중심 좌표.
     // 여기서 0.5를 다시 더하지 않는다.
@@ -66,10 +67,10 @@ float4 mainPS(VS_OUT Input) : SV_Target0
         mul(ClipPosition, InverseViewProjection);
     
     if (abs(WorldPositionH.w) < 1.0e-8f)
-        discard;
+        return float4(0, 0, 0, 0);
     
     float3 WorldPosition = WorldPositionH.xyz / WorldPositionH.w;
     
-    return EvaluateProjectedDecal(WorldPosition);
+    return EvaluateProjectedDecalNoDiscard(WorldPosition);
 
 }

@@ -611,6 +611,18 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 				uint64(Width) * uint64(Height) * 4ull * 2ull; // 4채널 8비트 * 2장
 		}
 
+		const bool bUseDecalReceiverStencil =
+			Options.bDecalReceiverStencil &&
+			Options.DecalRenderMethod == EDecalRenderMethod::DepthReconstruction &&
+			bNeedsDBuffer &&
+			Targets.Depth &&
+			Targets.Depth->GetReadOnlyDSV() &&
+			FRenderDevice::Get()->GetDepthStencilState(
+				EDepthStencilState::DecalReceiverWrite) &&
+			FRenderDevice::Get()->GetDepthStencilState(
+				EDepthStencilState::DecalReceiverTest);
+		
+
 		// 현재 업로드된 광원 정보를 기존 그리드에 전달한다.
 		FForwardLightTileGrid& Tiles = RenderData.ViewLightResources.GetTiles();
 		FStructuredBuffer* SceneLights = RenderData.ViewLightResources.GetSceneLights();
@@ -640,19 +652,58 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			FRenderGraphRasterPassDesc Prepass{};
 			Prepass.Name = "DepthPrepass";
 			Prepass.DepthAttachment = { Depth, ERenderGraphLoadAction::Clear, 1.0f, 0 };
-			if (!Graph.AddRasterPass(std::move(Prepass), [this, Renderer, DepthPipeline]
+			if (!Graph.AddRasterPass(std::move(Prepass), [this, Renderer, DepthPipeline, bUseDecalReceiverStencil]
 				{
 					if (ForwardBatches.IsEmpty()) return;
 
-					// 실제 메시 패스와 같은 VS를 사용해 깊이 계산을 일치시킨다.
-					FShaderProgram DepthProgram(ForwardBatches.Front().Pipeline.Shader->VertexShader, DepthPipeline->Shader->PixelShader);
-					TArray<FMeshDrawBatch> DepthBatches = ForwardBatches;
-					for (FMeshDrawBatch& Batch : DepthBatches)
+					for (const FMeshDrawBatch& SourceBatch : ForwardBatches)
 					{
+						if (SourceBatch.Items.IsEmpty())
+							continue;
+
+						if (!SourceBatch.Pipeline.Shader ||
+							!SourceBatch.Pipeline.Shader->VertexShader)
+						{
+							bCorePassSucceeded = false;
+							return;
+						}
+						
+						// 각 배치의 원래 VS를 사용한다.
+						FShaderProgram DepthProgram(
+							SourceBatch.Pipeline.Shader->VertexShader,
+							DepthPipeline->Shader->PixelShader);
+						
+						FMeshDrawBatch Batch = SourceBatch;
+
 						Batch.Pipeline = *DepthPipeline;
 						Batch.Pipeline.Shader = &DepthProgram;
+
+						// 원래 표면과 같은 래스터 규칙 유지
+						Batch.Pipeline.RasterizerState =
+							SourceBatch.Pipeline.RasterizerState;
+
+						Batch.Pipeline.StencilRef = 0;
+
+						if (bUseDecalReceiverStencil)
+						{
+							Batch.Pipeline.DepthStencilState =
+								EDepthStencilState::DecalReceiverWrite;
+						}
+
+						for (FMeshDrawBatch::FItem& Item : Batch.Items)
+						{
+							Item.bOverrideStencilRef =
+								bUseDecalReceiverStencil;
+
+							Item.StencilRef =
+								Item.bReceiveDecal
+								? StencilBits::ReceiveDecal
+								: 0;
+						}
+
+						// DepthProgram의 수명이 살아 있는 동안 바로 제출한다.
+						Renderer->DrawMeshes(std::span<const FMeshDrawBatch>(&Batch, 1));
 					}
-					Renderer->DrawMeshes(DepthBatches);
 				})) return false;
 		}
 
@@ -717,9 +768,20 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					{
 						if (bUseDepthReconstruction)
 						{
-							// Depth는 입력으로만 사용한다.
 							DecalPass.ReadTextures = { Depth };
 							DecalPass.ReadTextureStartSlot = 1;
+
+							if (bUseDecalReceiverStencil)
+							{
+								// Stencil을 사용할 경우, Depth를 읽고, Stencil을 검사하여 DecalReceiver만 처리한다.
+								DecalPass.DepthAttachment = {
+									Depth,
+									ERenderGraphLoadAction::Load,
+									1.0f, 0
+								};
+
+								DecalPass.DepthAttachment.bReadOnlyDepthStencil = true;
+							}
 						}
 						else
 						{
@@ -767,7 +829,8 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 							bUseDepthReconstruction,
 							bUnlitPass,
 							Width,
-							Height
+							Height,
+							bUseDecalReceiverStencil
 						]
 						{
 							if (!bCorePassSucceeded || !bNeedsDBuffer)
@@ -790,7 +853,8 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 										Height,
 										VisibleDecals,
 										bUnlitPass,
-										Counters);
+										Counters,
+										bUseDecalReceiverStencil);
 							}
 							else
 							{

@@ -94,7 +94,7 @@ public:
 	static void ClearDepthStencil(FTexture2D* DepthStencilTexture, float Depth = 1.0f, uint8 Stencil = 0);
 	static void SetRenderTargets(FTexture2D* ColorTarget, FTexture2D* DepthTarget);
 	// DepthTarget이 텍스처 배열이면 DepthArraySlice 번째 슬라이스를 깊이 타겟으로 쓴다.
-	static void SetRenderTargets(uint32 ColorTargetCount, FTexture2D* const* ColorTargets, FTexture2D* DepthTarget, uint32 DepthArraySlice = 0);
+	static void SetRenderTargets(uint32 ColorTargetCount, FTexture2D* const* ColorTargets, FTexture2D* DepthTarget, uint32 DepthArraySlice = 0, bool bReadOnlyDepthStencil = false);
 	static void ClearRenderTarget(FTexture2D* ColorTarget, const float(&Color)[4]);
 
 	// 크기·포맷이 같은 두 텍스처의 내용을 통째로 복사한다.

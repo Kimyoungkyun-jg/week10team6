@@ -67,6 +67,8 @@ void FRenderResourceManager::InitPipelineStates()
 		State->RasterizerState = Entry.RasterizerState;
 		State->BlendState = Entry.BlendState;
 		State->DepthStencilState = Entry.DepthStencilState;
+		State->StencilRef =
+			Type == EPSOType::Outline_Mask ? StencilBits::Outline : 0;
 	}
 	// Shadow 배치가 참조하는 VS 전용 프로그램은 리소스 매니저가 소유한다.
 	FShaderProgram* DepthProgram = GetShaderProgram("Resources/Shader/DepthPrepass.hlsl");

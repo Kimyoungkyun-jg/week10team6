@@ -362,22 +362,48 @@ void FRenderDevice::CreateStates()
 		Device->CreateDepthStencilState(&Desc, DepthStencilStates[(uint8)EDepthStencilState::Disabled].GetAddressOf());
 
 		// 깊이 없이 선택 메시 영역의 스텐실을 올린다 (참조값 0 기준).
-		Desc.StencilEnable = TRUE;
-		Desc.StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
-		Desc.StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
-		Desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
-		Desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
-		Desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_INCR_SAT;
-		Desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
-		Desc.BackFace = Desc.FrontFace;
-		Device->CreateDepthStencilState(&Desc, DepthStencilStates[(uint8)EDepthStencilState::StencilMask].GetAddressOf());
+		// Outline 마스크: bit 0만 1로 기록
+		{
+			D3D11_DEPTH_STENCIL_DESC Desc{};
+
+			Desc.DepthEnable = FALSE;
+			Desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+			Desc.DepthFunc = D3D11_COMPARISON_ALWAYS;
+
+			Desc.StencilEnable = TRUE;
+			Desc.StencilReadMask = StencilBits::Outline;
+			Desc.StencilWriteMask = StencilBits::Outline;
+
+			Desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+			Desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+			Desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+			Desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+			Desc.BackFace = Desc.FrontFace;
+
+			Device->CreateDepthStencilState(&Desc, DepthStencilStates[(uint8)EDepthStencilState::StencilMask].GetAddressOf());
+		}
 
 		// 스텐실이 0인 픽셀(선택 메시 바깥)에만 그린다.
-		Desc.StencilWriteMask = 0;
-		Desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
-		Desc.FrontFace.StencilFunc = D3D11_COMPARISON_EQUAL;
-		Desc.BackFace = Desc.FrontFace;
-		Device->CreateDepthStencilState(&Desc, DepthStencilStates[(uint8)EDepthStencilState::StencilOutline].GetAddressOf());
+		// Outline 그리기: bit 0이 0인 픽셀만 통과
+		{
+			D3D11_DEPTH_STENCIL_DESC Desc{};
+
+			Desc.DepthEnable = FALSE;
+			Desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+			Desc.DepthFunc = D3D11_COMPARISON_ALWAYS;
+
+			Desc.StencilEnable = TRUE;
+			Desc.StencilReadMask = StencilBits::Outline;
+			Desc.StencilWriteMask = 0;
+
+			Desc.FrontFace.StencilFunc = D3D11_COMPARISON_EQUAL;
+			Desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+			Desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+			Desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+			Desc.BackFace = Desc.FrontFace;
+
+			Device->CreateDepthStencilState(&Desc, DepthStencilStates[(uint8)EDepthStencilState::StencilOutline].GetAddressOf());
+		}
 
 		// 기존 깊이와 상관없이 덮어쓴다. 그림자 아틀라스의 타일 하나만 지울 때 쓴다.
 		D3D11_DEPTH_STENCIL_DESC AlwaysDesc = {};

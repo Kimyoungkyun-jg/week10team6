@@ -49,4 +49,35 @@ float4 EvaluateProjectedDecal(float3 WorldPosition)
     return float4(Color * Alpha, Alpha);
 };
 
+float4 EvaluateProjectedDecalNoDiscard(float3 WorldPosition)
+{
+    float3 DecalPosition =
+        mul(float4(WorldPosition, 1.0f), WorldToDecal).xyz;
+    
+    if (any(abs(DecalPosition) > 0.5f))
+        return float4(0, 0, 0, 0);
+    
+    float2 UV = DecalPosition.yz + 0.5f;
+    UV.y = 1.0f - UV.y;
+    
+    // 기존 Depth Reconstruction 경로의 샘플링 규칙 유지
+    float4 TextureColor =
+        DecalColorTexture.SampleLevel(DecalSampler, UV, 0.0f);
+    float3 TextureRGB = TextureColor.rgb;
+    
+    if (TextureParams.x > 0.5f)
+    {
+        TextureRGB = pow(max(TextureRGB, 0.0f), 2.2f);
+    }
+    
+    float Alpha = saturate(TextureColor.a * TintOpacity.a);
+    
+    if (Alpha < 0.0001f)
+        return float4(0, 0, 0, 0);
+    
+    float3 color = TextureRGB * TintOpacity.rgb;
+    
+    return float4(color * Alpha, Alpha);
+
+}
 #endif // PROJECTED_DECAL_COMMON_HLSLI

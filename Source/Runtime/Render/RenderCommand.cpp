@@ -371,7 +371,7 @@ void RenderCommand::SetRenderTargets(FTexture2D* ColorTarget, FTexture2D* DepthT
 }
 
 void RenderCommand::SetRenderTargets(uint32 ColorTargetCount, FTexture2D* const* ColorTargets,
-	FTexture2D* DepthTarget, uint32 DepthArraySlice)
+	FTexture2D* DepthTarget, uint32 DepthArraySlice, bool bReadOnlyDepthStencil)
 {
 	assert(ColorTargetCount <= D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT);
 	ID3D11RenderTargetView* RTVs[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT]{};
@@ -380,8 +380,19 @@ void RenderCommand::SetRenderTargets(uint32 ColorTargetCount, FTexture2D* const*
 	ID3D11DepthStencilView* DSV = nullptr;
 	if (DepthTarget)
 	{
-		DSV = DepthTarget->GetDimension() == ETextureDimension::Texture2DArray
-			? static_cast<FTexture2DArray*>(DepthTarget)->GetDSV(DepthArraySlice) : DepthTarget->GetDSV();
+		if (bReadOnlyDepthStencil)
+		{
+			// 현재는 FTexture2D만 지원한다.
+			assert(DepthTarget->GetDimension() == ETextureDimension::Texture2D);
+
+			DSV = DepthTarget->GetReadOnlyDSV();
+			assert(DSV);
+		}
+		else
+		{
+			DSV = DepthTarget->GetDimension() == ETextureDimension::Texture2DArray
+				? static_cast<FTexture2DArray*>(DepthTarget)->GetDSV(DepthArraySlice) : DepthTarget->GetDSV();
+		}
 	}
 	RenderDevice->GetContext()->OMSetRenderTargets(ColorTargetCount, ColorTargetCount ? RTVs : nullptr, DSV);
 }

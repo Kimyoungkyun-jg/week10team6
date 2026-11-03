@@ -176,7 +176,23 @@ FTexture2D* FRenderGraphBuilder::Resolve(FRenderGraphTextureRef Ref) const
 
 bool FRenderGraphBuilder::ValidatePass(const FRenderGraphRasterPassDesc& Desc) const
 {
-	return !(Desc.ColorAttachments.empty() && !Desc.DepthAttachment.Texture);
+	if (Desc.ColorAttachments.empty() &&
+		!Desc.DepthAttachment.Texture)
+	{
+		return false;
+	}
+
+	if (Desc.DepthAttachment.bReadOnlyDepthStencil)
+	{
+		if (!Desc.DepthAttachment.Texture)
+			return false;
+
+		// 읽기 전용 attachment를 clear하면 안된다.
+		if (Desc.DepthAttachment.LoadAction != ERenderGraphLoadAction::Load)
+			return false;
+	}
+
+	return true;
 }
 
 bool FRenderGraphBuilder::AddRasterPass(FRenderGraphRasterPassDesc Desc, std::function<void()> Execute)
@@ -221,6 +237,33 @@ bool FRenderGraphBuilder::Execute() // 등록되어 있던
 		{
 			Entry.Texture = AcquireTexture(Entry.Desc);
 			if (!Entry.Texture) return false;
+		}
+	}
+
+	// 패스 실행 전 검증
+	for (const FRasterPass& Pass : Passes)
+	{
+		if (Pass.bCompute ||
+			!Pass.Desc.DepthAttachment.bReadOnlyDepthStencil)
+		{
+			continue;
+		}
+
+		FTexture2D* Depth =
+			Resolve(Pass.Desc.DepthAttachment.Texture);
+
+		if (!Depth ||
+			Depth->GetDimension() != ETextureDimension::Texture2D ||
+			!Depth->GetReadOnlyDSV())
+		{
+			return false;
+		}
+
+		// 같은 텍스처를 컬러 출력으로도 쓰는 선언은 허용하지 않는다.
+		for (const FRenderGraphColorAttachment& Color : Pass.Desc.ColorAttachments)
+		{
+			if (Resolve(Color.Texture) == Depth)
+				return false;
 		}
 	}
 
@@ -290,7 +333,7 @@ bool FRenderGraphBuilder::Execute() // 등록되어 있던
 		}
 
 		RenderCommand::SetRenderTargets(static_cast<uint32>(Pass.Desc.ColorAttachments.size()), ColorTargets,
-			Depth, Pass.Desc.DepthAttachment.DSVIndex);
+			Depth, Pass.Desc.DepthAttachment.DSVIndex, Pass.Desc.DepthAttachment.bReadOnlyDepthStencil);
 		for (uint32 Index = 0; Index < Pass.Desc.ReadTextures.size(); ++Index)
 		{
 			const uint32 Slot = Pass.Desc.ReadTextureStartSlot + Index;

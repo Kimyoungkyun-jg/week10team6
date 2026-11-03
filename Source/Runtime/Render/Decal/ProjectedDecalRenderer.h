@@ -35,7 +35,8 @@ public:
 		uint32 Height,
 		std::span<const FProjectedDecalRenderData> Decals,
 		bool bUnlitPass,
-		FDecalFrameStats* Stats = nullptr);
+		FDecalFrameStats* Stats = nullptr,
+		bool bUseReceiverStencil = false);
 private:
 	// 비소유 포인터.
 	FRenderer* Renderer = nullptr;

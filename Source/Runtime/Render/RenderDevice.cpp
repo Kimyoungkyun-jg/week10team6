@@ -487,6 +487,47 @@ void FRenderDevice::CreateStates()
 				HTR_LOG(Error, "Create DecalReceiverTest failed: 0x{:08x}", static_cast<uint32>(Result));
 			}
 		}
+
+		// Decal Volume
+		{
+			auto CreateDecalVolumeState =
+				[&](EDepthStencilState State, bool bUseReceiverStencil)
+				{
+					D3D11_DEPTH_STENCIL_DESC Desc{};
+
+					Desc.DepthEnable = TRUE;
+					Desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+					Desc.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
+
+					Desc.StencilEnable = bUseReceiverStencil;
+					Desc.StencilReadMask = StencilBits::ReceiveDecal;
+					Desc.StencilWriteMask = 0;
+
+					Desc.FrontFace.StencilFunc = D3D11_COMPARISON_EQUAL;
+					Desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+					Desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+					Desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+
+					Desc.BackFace = Desc.FrontFace;
+
+					const HRESULT Result = Device->CreateDepthStencilState(
+						&Desc,
+						DepthStencilStates[
+							static_cast<uint8>(State)
+						].GetAddressOf());
+
+					if (FAILED(Result))
+					{
+						HTR_LOG(Error, "Create DecalVolumeState failed: 0x{:08x}", static_cast<uint32>(Result));
+					}
+				};
+
+			CreateDecalVolumeState(
+				EDepthStencilState::DecalVolumeGreaterEqual, false);
+
+			CreateDecalVolumeState(
+				EDepthStencilState::DecalVolumeGreaterEqualReceiver, true);
+		}
 	}
 
 	// ---------- Blend ----------

@@ -38,6 +38,9 @@ public:
 		FDecalFrameStats* Stats = nullptr,
 		bool bUseReceiverStencil = false);
 private:
+	bool InitVolumeResources();
+	bool IsVolumeResourcesReady() const;
+
 	// 비소유 포인터.
 	FRenderer* Renderer = nullptr;
 
@@ -47,4 +50,10 @@ private:
 
 	TUniquePtr<FConstantBuffer> ConstantBuffer;
 	TUniquePtr<FConstantBuffer> DepthViewConstantBuffer;
+
+	FPipelineState VolumePipelineState;
+
+	TUniquePtr<FVertexBuffer> VolumeVertexBuffer;
+	TUniquePtr<FIndexBuffer> VolumeIndexBuffer;
+	TUniquePtr<FConstantBuffer> VolumeConstantBuffer;
 };

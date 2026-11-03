@@ -680,6 +680,31 @@ void FViewportsPanel::DrawStatOverlay(ImDrawList* DrawList, const ImVec2& ViewMi
 					FGpuProfiler::Get().GetErrorCount()),
 				ValueColor
 				});
+
+			if (Frame.Method == EDecalRenderMethod::DepthReconstruction)
+			{
+				Lines.Add({
+					std::format(
+						"  Volume / Far Fallback: {} / {}",
+						Frame.VolumeDrawCalls,
+						Frame.FarFallbackDrawCalls),
+					ValueColor
+					});
+
+				Lines.Add({
+					std::format(
+						"  Frustum Rejected: {}",
+						Frame.FrustumRejectedDecals),
+					ValueColor
+					});
+
+				Lines.Add({
+					std::format(
+						"  Invalid Geometry: {}",
+						Frame.InvalidGeometryDecals),
+					ValueColor
+					});
+			}
 		}
 	}
 

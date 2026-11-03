@@ -771,17 +771,14 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 							DecalPass.ReadTextures = { Depth };
 							DecalPass.ReadTextureStartSlot = 1;
 
-							if (bUseDecalReceiverStencil)
-							{
-								// Stencil을 사용할 경우, Depth를 읽고, Stencil을 검사하여 DecalReceiver만 처리한다.
-								DecalPass.DepthAttachment = {
-									Depth,
-									ERenderGraphLoadAction::Load,
-									1.0f, 0
-								};
+							// 볼륨 경로의 GreaterEqual 검사를 위해 DSV가 항상 필요하다.
+							DecalPass.DepthAttachment = {
+								Depth,
+								ERenderGraphLoadAction::Load,
+								1.0f, 0
+							};
 
-								DecalPass.DepthAttachment.bReadOnlyDepthStencil = true;
-							}
+							DecalPass.DepthAttachment.bReadOnlyDepthStencil = true;
 						}
 						else
 						{

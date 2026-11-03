@@ -40,6 +40,11 @@ struct FDecalFrameStats
     uint64 SubmitCycles = 0;
 
     uint64 DBufferBytes = 0;
+
+    uint32 VolumeDrawCalls = 0;
+    uint32 FarFallbackDrawCalls = 0;
+    uint32 FrustumRejectedDecals = 0;
+    uint32 InvalidGeometryDecals = 0;
 };
 
 struct FDecalStats

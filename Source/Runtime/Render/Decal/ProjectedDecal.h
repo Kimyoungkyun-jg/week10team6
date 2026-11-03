@@ -51,6 +51,11 @@ struct alignas(16) FProjectedDecalDepthViewConstants
 	FVector4 ViewportSize;
 };
 
+struct alignas(16) FProjectedDecalVolumeConstants
+{
+	FMatrix DecalToClip;
+};
+
 // 양수 스케일만 허용한다.
 // 0에 가까운 스케일은 역행렬 계산 문제를 피하기 위해 제외한다.
 inline bool IsValidProjectedDecalRenderData(

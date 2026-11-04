@@ -44,6 +44,9 @@ struct FSkeletalMeshViewer
 	bool bShowMesh = true;
 	bool bShowGrid = false;
 	float DetailsHeight = 280.0f;
+	float CameraSpeed = 4.0f;
+	bool bEditingCameraSpeed = false;
+	bool bFocusCameraSpeedInput = false;
 	UTexture2D* ShowFlagsIcon = nullptr;
 	TUniquePtr<FSkyboxRenderer> Skybox;
 };

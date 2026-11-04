@@ -119,6 +119,24 @@ namespace
 		}
 		return isChanged;
 	}
+
+	void DrawBoneIcon(ImDrawList* DL, ImVec2 Center, float Size, ImU32 Color)
+	{
+		const float Half = Size * 0.5f;
+		const ImVec2 P1(Center.x - Half * 0.7f, Center.y + Half * 0.7f);
+		const ImVec2 P2(Center.x + Half * 0.7f, Center.y - Half * 0.7f);
+		DL->AddLine(P1, P2, Color, 2.0f);
+		const float R = 2.0f;
+		const float Offset = 1.8f;
+		DL->AddCircleFilled(ImVec2(P1.x - Offset, P1.y - Offset), R, Color);
+		DL->AddCircleFilled(ImVec2(P1.x + Offset, P1.y + Offset), R, Color);
+		DL->AddCircleFilled(ImVec2(P2.x - Offset, P2.y - Offset), R, Color);
+		DL->AddCircleFilled(ImVec2(P2.x + Offset, P2.y + Offset), R, Color);
+	}
+	void DrawDotIcon(ImDrawList* DL, ImVec2 Center, float Radius, ImU32 Color)
+	{
+		DL->AddCircleFilled(Center, Radius, Color);
+	}
 }
 
 FSkeletalMeshViewer::~FSkeletalMeshViewer()
@@ -510,6 +528,100 @@ void FSkeletalMeshViewerPanel::DrawViewportToolbar(FSkeletalMeshViewer& Viewer)
 		ImGui::EndPopup();
 	}
 	ImGui::PopStyleVar(3);
+
+	// ---- Camera Speed UI----
+	ImGui::SameLine(0.0f, 6.0f);
+
+	char SpeedStr[16];
+	snprintf(SpeedStr, sizeof(SpeedStr), "%.1f", Viewer.CameraSpeed);
+	const float CamTextWidth = ImGui::CalcTextSize(SpeedStr).x;
+	const float CamIconWidth = 18.0f;
+	const float CamSpacing = 5.0f;
+	const ImVec2 CamTotalSize(Padding.x * 2.0f + CamIconWidth + CamSpacing + CamTextWidth + CamSpacing + ChevronWidth, TotalSize.y);
+
+	const ImVec2 CamCursorScreenPos = ImGui::GetCursorScreenPos();
+	const FString CamBtnId = "##CameraSpeedBtn_" + std::to_string(Viewer.Id);
+	ImGui::InvisibleButton(CamBtnId.c_str(), CamTotalSize);
+
+	const bool bCamHovered = ImGui::IsItemHovered();
+	const bool bCamActive = ImGui::IsItemActive();
+
+	// 드래그로 속도 조절
+	if (bCamActive && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 1.0f))
+	{
+		Viewer.bEditingCameraSpeed = true;
+		const float DragDelta = ImGui::GetIO().MouseDelta.x;
+		Viewer.CameraSpeed = std::clamp(Viewer.CameraSpeed + DragDelta * 0.05f, 0.1f, 20.0f);
+	}
+
+	if (bCamActive || (bCamHovered && !Viewer.bEditingCameraSpeed))
+	{
+		ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+	}
+
+	bool bOpenCamPopup = false;
+	if (ImGui::IsItemDeactivated())
+	{
+		if (!Viewer.bEditingCameraSpeed)
+		{
+			bOpenCamPopup = true;
+		}
+		Viewer.bEditingCameraSpeed = false;
+	}
+
+	if (bCamHovered && !Viewer.bEditingCameraSpeed)
+	{
+		ImGui::BeginTooltip();
+		ImGui::Text("Camera Speed: %.2f", Viewer.CameraSpeed);
+		ImGui::TextDisabled("Click & drag left/right to adjust");
+		ImGui::TextDisabled("Click to open slider popup");
+		ImGui::EndTooltip();
+	}
+
+	const ImU32 CamBgColor = bCamActive ? IM_COL32(35, 35, 35, 255) :
+	                         bCamHovered ? IM_COL32(70, 70, 70, 255) :
+	                         IM_COL32(50, 50, 50, 220);
+	const ImU32 CamBorderColor = bCamHovered ? IM_COL32(110, 110, 110, 220) : IM_COL32(65, 65, 65, 180);
+
+	const ImVec2 CamRectMax(CamCursorScreenPos.x + CamTotalSize.x, CamCursorScreenPos.y + CamTotalSize.y);
+	DrawList->AddRectFilled(CamCursorScreenPos, CamRectMax, CamBgColor, Rounding);
+	DrawList->AddRect(CamCursorScreenPos, CamRectMax, CamBorderColor, Rounding, 0, 1.0f);
+
+	// 카메라 아이콘 그리기
+	const ImVec2 CamCenter(CamCursorScreenPos.x + Padding.x + CamIconWidth * 0.5f, CamCursorScreenPos.y + TotalSize.y * 0.5f);
+	const ImU32 CamIconColor = bCamActive ? IM_COL32(255, 255, 255, 255) :
+	                           bCamHovered ? IM_COL32(240, 240, 240, 255) :
+	                           IM_COL32(200, 200, 200, 255);
+	const ImU32 CamLensColor = bCamActive ? IM_COL32(35, 35, 35, 255) :
+	                           bCamHovered ? IM_COL32(65, 65, 65, 255) :
+	                           IM_COL32(50, 50, 50, 255);
+
+	// 카메라 바디
+	DrawList->AddRectFilled(ImVec2(CamCenter.x - 7.5f, CamCenter.y - 4.5f), ImVec2(CamCenter.x + 7.5f, CamCenter.y + 5.5f), CamIconColor, 2.0f);
+	// 상단 뷰파인더 턱
+	DrawList->AddRectFilled(ImVec2(CamCenter.x - 4.0f, CamCenter.y - 7.0f), ImVec2(CamCenter.x + 0.5f, CamCenter.y - 4.5f), CamIconColor, 1.0f);
+	// 렌즈 원
+	DrawList->AddCircleFilled(ImVec2(CamCenter.x, CamCenter.y + 0.5f), 3.2f, CamLensColor);
+	DrawList->AddCircle(ImVec2(CamCenter.x, CamCenter.y + 0.5f), 3.2f, CamIconColor, 12, 1.0f);
+	DrawList->AddCircleFilled(ImVec2(CamCenter.x, CamCenter.y + 0.5f), 1.2f, CamIconColor);
+
+	// 속도 숫자 텍스트
+	const float TextStartX = CamCursorScreenPos.x + Padding.x + CamIconWidth + CamSpacing;
+	const float TextStartY = CamCursorScreenPos.y + (TotalSize.y - ImGui::GetTextLineHeight()) * 0.5f;
+	DrawList->AddText(ImVec2(TextStartX, TextStartY), IM_COL32(220, 220, 220, 255), SpeedStr);
+
+	// 셰브론(화살표)
+	const float CamChevronX = TextStartX + CamTextWidth + CamSpacing;
+	const float CamChevronY = CamCursorScreenPos.y + (TotalSize.y - ChevronHeight) * 0.5f;
+	const ImU32 CamChevronColor = bCamActive ? IM_COL32(255, 255, 255, 255) :
+	                              bCamHovered ? IM_COL32(230, 230, 230, 255) :
+	                              IM_COL32(190, 190, 190, 255);
+	const ImVec2 CamChevronPts[3] = {
+		ImVec2(CamChevronX, CamChevronY),
+		ImVec2(CamChevronX + ChevronWidth * 0.5f, CamChevronY + ChevronHeight),
+		ImVec2(CamChevronX + ChevronWidth, CamChevronY)
+	};
+	DrawList->AddPolyline(CamChevronPts, 3, CamChevronColor, 0, 1.6f);
 }
 
 void FSkeletalMeshViewerPanel::DrawViewport(FSkeletalMeshViewer& Viewer)
@@ -544,19 +656,45 @@ void FSkeletalMeshViewerPanel::DrawViewport(FSkeletalMeshViewer& Viewer)
 	// 오른쪽 버튼 + 마우스 회전
 	// WASD/QE 이동
 	if (ImGui::IsItemHovered() || ImGui::IsItemActive())
-		Viewer.Client.TickInput(ImGui::GetIO().DeltaTime, ImGui::IsMouseDown(ImGuiMouseButton_Right), true, 0, 10.0f, 0.2f);
+	{
+		if (ImGui::IsMouseDown(ImGuiMouseButton_Right) && ImGui::GetIO().MouseWheel != 0.0f)
+		{
+			Viewer.CameraSpeed = std::clamp(Viewer.CameraSpeed + ImGui::GetIO().MouseWheel * 0.5f, 0.1f, 20.0f);
+		}
+		const float MoveSpeed = 2.5f * Viewer.CameraSpeed;
+		Viewer.Client.TickInput(ImGui::GetIO().DeltaTime, ImGui::IsMouseDown(ImGuiMouseButton_Right), true, 0, MoveSpeed, 0.2f);
+	}
 }
 
 void FSkeletalMeshViewerPanel::DrawBoneTree(FSkeletalMeshViewer& Viewer)
 {
 	const TArray<FBoneInfo>& Bones = Viewer.MeshComponent->GetSkeletalMesh()->MeshData.Bones;
-	for (int32 i = 0; i < Bones.Num(); ++i)
-		if (Bones[i].ParentIndex < 0)
-			DrawBoneNode(Viewer, i); // Root부터 재귀로 내려간다
+
+	ImGui::PushStyleColor(ImGuiCol_TableRowBg, ImVec4(0.11f, 0.11f, 0.11f, 1.0f));
+	ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
+	ImGuiTableFlags TableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp;
+
+	if (ImGui::BeginTable("##BoneTreeTable", 1, TableFlags))
+	{
+		for (int32 i = 0; i < Bones.Num(); ++i)
+		{
+			if (Bones[i].ParentIndex < 0)
+				DrawBoneNode(Viewer, i);
+		}
+		ImGui::EndTable();
+	}
+	ImGui::PopStyleColor(2);
 }
 
 void FSkeletalMeshViewerPanel::DrawBoneNode(FSkeletalMeshViewer& Viewer, int32 BoneIndex)
 {
+	ImGui::TableNextRow();
+	ImGui::TableNextColumn();
+	if (BoneIndex == Viewer.SelectedBone)
+	{
+		ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImColor(0, 122, 204, 255));
+	}
+
 	const FBoneInfo& Bone = Viewer.MeshComponent->GetSkeletalMesh()->MeshData.Bones[BoneIndex];
 	const bool bLeaf = Viewer.Children[BoneIndex].IsEmpty();
 
@@ -566,12 +704,53 @@ void FSkeletalMeshViewerPanel::DrawBoneNode(FSkeletalMeshViewer& Viewer, int32 B
 	if (BoneIndex == Viewer.SelectedBone)
 		Flags |= ImGuiTreeNodeFlags_Selected;
 
-	// 자식이 없으면 TreePush를 하지 않으므로 아래에서 TreePop도 안 한다
 	if (bLeaf)
 		Flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
 
-	// Bone 이름이 겹칠 수 있으므로 ID는 Index로
-	const bool bOpen = ImGui::TreeNodeEx(reinterpret_cast<void*>(static_cast<intptr_t>(BoneIndex)), Flags, "%s", Bone.Name.c_str());
+	bool bIsSocketOrLeaf = false;
+	if (bLeaf) // 자식이 없는 말단 본
+	{
+		bIsSocketOrLeaf = true;
+	}
+	const std::string& BoneName = Bone.Name;
+	if (BoneName.find("_end") != std::string::npos ||
+		BoneName.find("Socket") != std::string::npos ||
+		BoneName.find("Cor_") != std::string::npos)
+	{
+		bIsSocketOrLeaf = true;
+	}
+
+	const bool bOpen = ImGui::TreeNodeEx(
+		reinterpret_cast<void*>(static_cast<intptr_t>(BoneIndex)),
+		Flags,
+		"  %s", Bone.Name.c_str()
+	);
+
+	ImDrawList* DL = ImGui::GetWindowDrawList();
+	ImVec2 ItemMin = ImGui::GetItemRectMin();
+	float FontSize = ImGui::GetFontSize();
+	float RowHeight = ImGui::GetFrameHeight();
+
+	const float IconOffsetX = 4.0f;
+
+	ImVec2 IconCenter = ImVec2(
+		ItemMin.x + ImGui::GetTreeNodeToLabelSpacing() + IconOffsetX,
+		ItemMin.y + RowHeight * 0.35f
+	);
+
+	ImU32 IconColor = (BoneIndex == Viewer.SelectedBone)
+		? IM_COL32(255, 255, 255, 255)
+		: IM_COL32(180, 180, 180, 220);
+
+	if (bIsSocketOrLeaf)
+	{
+		DrawDotIcon(DL, IconCenter, 3.0f, IconColor);
+	}
+	else
+	{
+		DrawBoneIcon(DL, IconCenter, 11.0f, IconColor);
+	}
+
 	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
 		SelectBone(Viewer, BoneIndex);
 

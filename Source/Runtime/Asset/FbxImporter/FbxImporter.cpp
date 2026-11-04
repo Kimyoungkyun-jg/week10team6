@@ -123,9 +123,11 @@ namespace
                 }
             }
 
+            // 반사 (음수 스케일) 이 있는 변환이면 Winding 순서가 뒤집히므로 되돌린다.
+            const bool bMirrored = MeshMatrix.Determinant() < 0.0f;
             for (int corner = 0; corner < 3; ++corner)
             {
-                FFbxCorner& Corner = Polygon.Corners[corner];
+                FFbxCorner& Corner = Polygon.Corners[bMirrored ? 2 - corner : corner];
 
                 // ControlPoint 인덱스
                 int cpIndex = Mesh->GetPolygonVertex(polyIdx, corner);
@@ -562,7 +564,7 @@ bool FFbxImporter::ParseFbx(const FString& Path, FFbxInfo& Out)
     if (SceneAxisSystem != EngineAxisSystem)
     {
         // 기저 변환으로 회전시키고 삼각형 감김 순서를 뒤집어서 겉면이 제대로 보이도록 한다.
-        EngineAxisSystem.ConvertScene(Scene);
+        EngineAxisSystem.DeepConvertScene(Scene);
     }
 
     // 삼각화
@@ -629,7 +631,7 @@ bool FFbxImporter::LoadAnimationClips(const FString& Path, TArray<FAnimationClip
         fbxsdk::FbxAxisSystem::eParityEven, 
         fbxsdk::FbxAxisSystem::eLeftHanded);
     if (Scene->GetGlobalSettings().GetAxisSystem() != EngineAxisSystem)
-        EngineAxisSystem.ConvertScene(Scene);
+        EngineAxisSystem.DeepConvertScene(Scene);
 
     TArray<fbxsdk::FbxNode*> BoneNodes;
     TArray<FString> BoneNames;
@@ -779,7 +781,7 @@ bool FFbxImporter::Cook(const FFbxInfo& Raw, FSkeletalMeshData& Out)
             int32 PolyMtlIdx = (Poly.MaterialIndex >= 0 && Poly.MaterialIndex < MaterialCount) ? Poly.MaterialIndex : 0;
             if (PolyMtlIdx != mtlIdx) continue;
 
-            const int CornerOrder[3] = { 2, 1, 0 };
+            const int CornerOrder[3] = { 0, 1, 2 };
             // 삼각형 3개 꼭짓점을 정점으로 변환 (CW 앞면 정렬)
             for (int i = 0; i < 3; ++i)
             {

@@ -4,6 +4,50 @@
 #include "Text/Font.h"
 #include "Editor/HitoriEd/EditorDragDrop.h"
 
+#include "Engine/World.h"
+#include "Engine/Engine.h"
+#include "Editor/HitoriEd/EditorEngine.h"
+
+#include "GameFramework/Actor/SkeletalMeshActor.h"
+#include "GameFramework/Actor/SkyLightActor.h"
+#include "GameFramework/Actor/DirectionalLightActor.h"
+#include "Components/BillboardComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+
+#include "Render/SkeletalMesh.h"
+#include "Render/RenderCommand.h"
+#include "Math/MathUtility.h"
+#include "Components/LightComponent.h"
+#include "Launch/LaunchEngineLoop.h"
+#include "Render/Swapchain.h"
+#include "Render/SkyboxRenderer.h"
+
+FContentDrawerPanel::FContentDrawerPanel() = default;
+
+void FContentDrawerPanel::Release()
+{
+	ThumbnailClient.SetWorld(nullptr);
+	if (ThumbnailWorld)
+	{
+		ThumbnailWorld->ClearWorld();
+		ThumbnailWorld->FlushPendingDestruction();
+		if (GEngine)
+		{
+			GEngine->DestroyWorld(ThumbnailWorld);
+		}
+		ThumbnailWorld = nullptr;
+	}
+	ThumbnailActor = nullptr;
+	ThumbnailSkybox.reset();
+	ThumbnailCache.clear();
+	bStudioInitialized = false;
+}
+
+FContentDrawerPanel::~FContentDrawerPanel()
+{
+	Release();
+}
+
 bool FContentDrawerPanel::Init()
 {
 	return false;
@@ -85,7 +129,7 @@ void FContentDrawerPanel::OnRender()
 		}
 
 		// 그리드 레이아웃 계산
-		float padding = 16.0f;
+		float padding = 24.0f;
 		float thumbnailSize = 80.0f;
 		float cellSize = thumbnailSize + padding;
 		float panelWidth = ImGui::GetContentRegionAvail().x;
@@ -121,6 +165,8 @@ void FContentDrawerPanel::OnRender()
 				// 폴더/파일 아이콘은 끌 수 없어야 하므로 썸네일과 구분해서 들고 있는다.
 				UTexture2D* TextureAsset = nullptr;
 				UFont* FontAsset = nullptr;
+				// 3D 모델용 아이콘
+				ID3D11ShaderResourceView* ThumbnailSRV = nullptr;
 
 				// 폴더 또는 파일 아이콘 표시
 				if (bIsDirectory)
@@ -142,16 +188,48 @@ void FContentDrawerPanel::OnRender()
 						// 폰트는 글리프 아틀라스를 그대로 미리보기로 쓴다
 						Thumbnail = FontAsset->AtlasTexture;
 					}
-
-					if (Thumbnail == nullptr)
+					else if (Path.extension() == ".fbx" || Path.extension() == ".FBX")
 					{
-						Thumbnail = UAssetManager::GetAssetByPath<UTexture2D>(FileIconPath);
+						if (FTexture2D* FbxThumb = GetOrCreateSkeletalMeshThumbnail(PathString))
+						{
+							ThumbnailSRV = FbxThumb->GetSRV();
+						}
+					}
+
+				}
+
+				if (Thumbnail && Thumbnail->GetResource())
+				{
+					ThumbnailSRV = Thumbnail->GetResource()->GetSRV();
+				}
+				else if (!ThumbnailSRV)
+				{
+					Thumbnail = UAssetManager::GetAssetByPath<UTexture2D>(FileIconPath);
+					if (Thumbnail && Thumbnail->GetResource())
+					{
+						ThumbnailSRV = Thumbnail->GetResource()->GetSRV();
 					}
 				}
-				if (Thumbnail)
+
+				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 4.0f));
+
+				const float availWidth = ImGui::GetContentRegionAvail().x;
+				const float totalButtonWidth = thumbnailSize + 8.0f;
+				if (availWidth > totalButtonWidth)
 				{
-					ImGui::ImageButton(PathString.c_str(), (ImTextureID)Thumbnail->GetResource()->GetSRV(), { thumbnailSize, thumbnailSize });
+					ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availWidth - totalButtonWidth) * 0.5f);
 				}
+
+				if (ThumbnailSRV)
+				{
+					ImGui::ImageButton(PathString.c_str(), (ImTextureID)ThumbnailSRV, { thumbnailSize, thumbnailSize });
+				}
+				else
+				{
+					ImGui::Button(FilenameString.c_str(), { thumbnailSize, thumbnailSize });
+				}
+
+				ImGui::PopStyleVar();
 
 				// 페이로드에 포인터를 그대로 실어서 받는 쪽이 AssetMap을 다시 뒤지지 않게 한다.
 				if (TextureAsset && ImGui::BeginDragDropSource())
@@ -190,6 +268,21 @@ void FContentDrawerPanel::OnRender()
 				}
 				// 파일 이름 표시
 				ImGui::TextWrapped("%s", FilenameString.c_str());
+				if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+				{
+					if (bIsDirectory)
+					{
+						CurrentPath /= Path.filename();
+					}
+					else if (Path.extension() == ".widget" && OnOpenWidget)
+					{
+						OnOpenWidget(PathString);
+					}
+					else if ((Path.extension() == ".fbx" || Path.extension() == ".FBX") && OnOpenSkeletalMesh)
+					{
+						OnOpenSkeletalMesh(PathString);
+					}
+				}
 
 				ImGui::PopID();
 			}
@@ -245,4 +338,117 @@ void FContentDrawerPanel::RenderFolderTree(const fs::path& Path, fs::path& Selec
 	{
 		ImGui::TextUnformatted("Could not read this folder.");
 	}
+}
+
+void FContentDrawerPanel::InitThumbnailStudio()
+{
+	if (bStudioInitialized)
+		return;
+
+	ThumbnailWorld = UWorld::CreateWorld(EWorldType::Editor, false);
+	if (!ThumbnailWorld)
+		return;
+
+	ThumbnailActor = ThumbnailWorld->SpawnActor<ASkeletalMeshActor>();
+
+	if (ASkyLightActor* SkyLight = ThumbnailWorld->SpawnActor<ASkyLightActor>())
+	{
+		SkyLight->GetBillboardComponent()->SetVisibility(false);
+		SkyLight->GetLightComponent()->SetIntensity(0.3f);
+	}
+	if (ADirectionalLightActor* Sun = ThumbnailWorld->SpawnActor<ADirectionalLightActor>())
+	{
+		Sun->GetBillboardComponent()->SetVisibility(false);
+		Sun->GetArrowComponent()->SetVisibility(false);
+		Sun->GetLightComponent()->SetIntensity(1.0f);
+		Sun->GetLightComponent()->SetRelativeRotation(FRotator(40.0f, 160.0f, 0.0f));
+	}
+
+	ThumbnailSkybox = MakeUnique<FSkyboxRenderer>();
+	if (!ThumbnailSkybox->Init("Assets/SkySphere/SkeletalMeshViewer.hdr"))
+	{
+		ThumbnailSkybox.reset();
+	}
+
+	ThumbnailClient.SetWorld(ThumbnailWorld);
+	ThumbnailClient.SetViewportType(ELevelViewportType::Perspective);
+	ThumbnailClient.Resize(128, 128);
+	ThumbnailClient.SetRect(FRect{ 0.0f, 0.0f, 128.0f, 128.0f });
+
+	bStudioInitialized = true;
+}
+
+FTexture2D* FContentDrawerPanel::GetOrCreateSkeletalMeshThumbnail(const FString& FbxPath)
+{
+	auto It = ThumbnailCache.find(FbxPath);
+	if (It != ThumbnailCache.end())
+	{
+		return It->second.get();
+	}
+
+	InitThumbnailStudio();
+	if (!ThumbnailActor || !ThumbnailWorld)
+	{
+		ThumbnailCache[FbxPath] = nullptr;
+		return nullptr;
+	}
+
+	USkeletalMesh* Mesh = UAssetManager::LoadFbxSkeletalMesh(FbxPath);
+	if (!Mesh)
+	{
+		ThumbnailCache[FbxPath] = nullptr;
+		return nullptr;
+	}
+	ThumbnailActor->GetSkeletalMeshComponent()->SetSkeletalMesh(Mesh);
+
+	const FBox Bounds = ThumbnailActor->GetSkeletalMeshComponent()->CalcBounds();
+	const FVector Extent = Bounds.Max - Bounds.Min;
+	const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
+
+	const float HalfDim = std::max(Extent.Z * 0.5f, std::max(Extent.X, Extent.Y) * 0.5f);
+	const float HalfFov = FMath::DegreesToRadians(ThumbnailClient.GetViewFOV()) * 0.5f;
+	const float Distance = (HalfDim / std::max(0.2f, std::sin(HalfFov))) * 0.8f;
+
+	ThumbnailClient.SetViewRotation(FRotator(10.0f, 165.0f, 0.0f));
+	const FVector TargetPos = Center + FVector(0.0f, 0.0f, Extent.Z * 0.04f);
+	ThumbnailClient.SetViewLocation(TargetPos - ThumbnailClient.GetViewForward() * Distance);
+
+	if (UEditorEngine* EdEngine = Cast<UEditorEngine>(GEngine))
+	{
+		EdEngine->RenderPreviewViewport(&ThumbnailClient, ThumbnailWorld, nullptr, ThumbnailSkybox.get(), false);
+		FEngineLoop& Loop = GEngine->GetEngineLoop();
+		if (FSwapchain* SC = Loop.GetSwapchain())
+		{
+			if (FWindow* Win = Loop.GetMainWindow())
+			{
+				RenderCommand::BindRenderPassNoClear(SC->GetBackbuffer(), nullptr,
+					Win->GetWidth(), Win->GetHeight());
+			}
+		}
+	}
+
+	FTexture2D* RenderedTarget = ThumbnailClient.GetColorTarget();
+	if (!RenderedTarget)
+	{
+		ThumbnailCache[FbxPath] = nullptr;
+		return nullptr;
+	}
+
+	FTextureDesc Desc{};
+	Desc.Width = RenderedTarget->GetWidth();
+	Desc.Height = RenderedTarget->GetHeight();
+	Desc.Format = RenderedTarget->GetTextureFormat();
+	Desc.Usage = ETextureUsage::Default;
+	Desc.BindFlags = ETextureBindFlags::ShaderResource;
+
+	TUniquePtr<FTexture2D> CachedTex = RenderCommand::CreateTexture2D(Desc);
+	if (CachedTex)
+	{
+		RenderCommand::CopyTexture(CachedTex.get(), RenderedTarget);
+		ThumbnailCache[FbxPath] = std::move(CachedTex);
+		return ThumbnailCache[FbxPath].get();
+	}
+
+	ThumbnailCache[FbxPath] = nullptr;
+	return nullptr;
 }

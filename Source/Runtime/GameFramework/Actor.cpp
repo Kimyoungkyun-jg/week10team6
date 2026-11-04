@@ -24,6 +24,8 @@ AActor::AActor()
 
 AActor::~AActor()
 {
+	UnregisterAllComponents();
+
 	TArray<UActorComponent*> ToDelete = Components;
 	Components.Reset();
 	RootComponent = nullptr;

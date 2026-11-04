@@ -222,10 +222,15 @@ void FSkeletalMeshViewerPanel::OpenFBX(const FString& Path)
 	Viewer->ViewSize = ImVec2(800.0f, 600.0f);
 	Viewer->Client.Resize(800, 600);
 
-	// Mesh가 한 화면에 들어오게 카메라를 뒤로 이동 (FOV 60 기준)
+	// Mesh 정면을 바라보도록 카메라 위치 및 회전 설정 (FOV 60 기준)
 	const FBox Bounds = Viewer->MeshComponent->CalcBounds();
-	const float Radius = (Bounds.Max - Bounds.Min).Size() * 0.5f;
-	Viewer->Client.SetViewLocation((Bounds.Min + Bounds.Max) * 0.5f - Viewer->Client.GetViewForward() * (Radius * 3.0f));
+	const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
+	const float Radius = std::max(0.5f, (Bounds.Max - Bounds.Min).Size() * 0.5f);
+	const float HalfFov = FMath::DegreesToRadians(Viewer->Client.GetViewFOV()) * 0.5f;
+	const float Distance = Radius / std::max(0.2f, std::sin(HalfFov)) * 1.25f;
+
+	Viewer->Client.SetViewRotation(FRotator(10.0f, 165.0f, 0.0f));
+	Viewer->Client.SetViewLocation(Center - Viewer->Client.GetViewForward() * Distance);
 
 	Viewer->BoneGizmoTarget = NewObject<USceneComponent>();
 

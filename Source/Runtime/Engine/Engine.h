@@ -104,6 +104,8 @@ public:
 	void InitializeAudioDevice();     // UE UEngine::InitializeAudioDeviceManager
 	void ShutdownAudioDevice();
 
+	FEngineLoop& GetEngineLoop() const { return *EngineLoop; }
+
 protected:
 	// 맵 교체 직전·직후 알림. 에디터는 PIE 월드 포인터와 패널을 여기서 갱신한다.
 	virtual void PreLoadMap(FWorldContext& Context) {}
@@ -111,8 +113,6 @@ protected:
 
 	UAssetManager* AssetManager;
 	FAudioDevice* MainAudioDevice = nullptr;
-
-	FEngineLoop& GetEngineLoop() const { return *EngineLoop; }
 
 	TIndirectArray<FWorldContext> WorldContextlist;
 	//UWorld* World = nullptr;

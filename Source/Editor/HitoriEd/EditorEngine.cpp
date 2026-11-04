@@ -1355,6 +1355,7 @@ void UEditorEngine::PreExit()
 	if (SequencerPanel) SequencerPanel->Shutdown();
 	if (PoseRetargetPanel) PoseRetargetPanel->Release();
 	if (SkeletalMeshViewerPanel) SkeletalMeshViewerPanel->Release();
+	if (ContentDrawerPanel) ContentDrawerPanel->Release();
 	EditorWorld->ClearWorld();
 	// PIE 창이 열린 채 종료하면 Device가 살아 있을 때 Swapchain과 타깃을 먼저 정리한다.
 	DestroyPIEWindow();

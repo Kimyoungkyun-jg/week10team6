@@ -49,9 +49,26 @@ public:
 	void CreateEditorArrowMaterial();
 
 	template <typename T>
-	static T* GetAssetByPath(const FString& Path)
+	static T* GetAssetByPath(const FString& InPath)
 	{
-		URenderAsset** Found = Get().AssetMap.Find(Path);
+		FString Normalized = InPath;
+		for (char& C : Normalized)
+		{
+			if (C == '\\') C = '/';
+		}
+
+		URenderAsset** Found = Get().AssetMap.Find(Normalized);
+		if (!Found)
+		{
+			if (Normalized.rfind("Assets/", 0) == 0)
+			{
+				Found = Get().AssetMap.Find(Normalized.substr(7));
+			}
+			else
+			{
+				Found = Get().AssetMap.Find("Assets/" + Normalized);
+			}
+		}
 
 		if (Found == nullptr || *Found == nullptr || !(*Found)->IsA<T>())
 		{

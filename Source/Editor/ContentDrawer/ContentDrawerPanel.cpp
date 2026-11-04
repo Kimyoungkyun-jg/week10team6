@@ -183,7 +183,7 @@ void FContentDrawerPanel::OnRender()
 					{
 						OnOpenWidget(PathString);
 					}
-					else if (Path.extension() == ".fbx" && OnOpenSkeletalMesh)
+					else if ((Path.extension() == ".fbx" || Path.extension() == ".FBX") && OnOpenSkeletalMesh)
 					{
 						OnOpenSkeletalMesh(PathString);
 					}

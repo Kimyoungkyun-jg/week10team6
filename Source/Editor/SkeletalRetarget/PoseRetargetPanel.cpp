@@ -27,7 +27,7 @@ namespace
 		FString Extension = Path.extension().string();
 		std::transform(Extension.begin(), Extension.end(), Extension.begin(),
 			[](unsigned char Character) { return static_cast<char>(std::tolower(Character)); });
-		return Extension == ".fbx";
+		return Extension == ".fbx" || Extension == ".FBX";
 	}
 
 	FString BoneMatchKey(const FString& Name)

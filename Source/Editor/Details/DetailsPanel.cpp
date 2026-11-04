@@ -6,6 +6,9 @@
 #include "Editor/HitoriEd/EditorDragDrop.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SkinnedMeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Render/SkeletalMesh.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/ParticleSubUVComponent.h"
 #include "Components/SpotLightComponent.h"
@@ -452,6 +455,52 @@ namespace
 		}
 	}
 
+	void DrawSkeletalMeshSlot(UObject* Owner, USkeletalMesh** SkeletalMeshPtr)
+	{
+		USkeletalMesh* Current = *SkeletalMeshPtr;
+
+		FString CurrentPath = Current ? Current->GetPath() : "";
+		FString CurrentFileName = Current ? (CurrentPath.empty() ? Current->GetName() : GetAssetDisplayName(CurrentPath)) : "None";
+
+		ImGui::SetNextItemWidth(-1.0f);
+
+		bool bOpen = ImGui::BeginCombo("##SkeletalMesh", CurrentFileName.c_str());
+		if (ImGui::IsItemHovered() && Current)
+		{
+			ImGui::SetTooltip("%s", CurrentPath.c_str());
+		}
+
+		if (bOpen)
+		{
+			for (TObjectIterator<USkeletalMesh> Itr; Itr; ++Itr)
+			{
+				bool bSelected = (*Itr == Current);
+
+				FString ItemPath = Itr->GetPath();
+				FString ItemFileName = ItemPath.empty() ? Itr->GetName() : GetAssetDisplayName(ItemPath);
+
+				ImGui::PushID(*Itr);
+
+				if (ImGui::Selectable(ItemFileName.c_str(), bSelected))
+				{
+					if (ImGui::IsItemHovered())
+					{
+						ImGui::SetTooltip("%s", ItemPath.c_str());
+					}
+
+					if (USkinnedMeshComponent* SkinnedComponent = Cast<USkinnedMeshComponent>(Owner))
+						SkinnedComponent->SetSkeletalMesh(*Itr);
+					else
+						*SkeletalMeshPtr = *Itr;
+				}
+				ImGui::PopID();
+				if (bSelected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+	}
+
 	UMaterial* EnsureMaterialOverride(UMeshComponent* MeshComponent, int32 Slot, UMaterial* Effective, UMaterial* Override)
 	{
 		// 이 컴포넌트 전용 인스턴스가 아니면 지금 적용 중인 머티리얼을 복제해서 덮어쓰기로 만든다.
@@ -880,6 +929,10 @@ namespace
 			else if (Property.Class == UStaticMesh::StaticClass())
 			{
 				DrawMeshSlot(Object, reinterpret_cast<UStaticMesh**>(ObjPtr));
+			}
+			else if (Property.Class == USkeletalMesh::StaticClass())
+			{
+				DrawSkeletalMeshSlot(Object, reinterpret_cast<USkeletalMesh**>(ObjPtr));
 			}
 			break;
 		}

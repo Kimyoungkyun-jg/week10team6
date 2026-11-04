@@ -65,7 +65,16 @@ FDecalOutput EvaluateProjectedDecalNoDiscard(float3 WorldPosition)
         TextureRGB = pow(max(TextureRGB, 0.0f), 2.2f);
     }
     
-    float ColorAlpha = saturate(TextureColor.a * TintOpacity.a);
+    // 로컬 X축 양 끝에서 안쪽으로 페이드되는 폭
+    // 0.1이면 전체 투영 깊이의 10%씩 양 끝에서 페이드
+    float FadeWidth = 0.1f;
+    
+    float DistanceToBoundary = 0.5f - abs(DecalPosition.x);
+    float DepthFade = smoothstep(0.0f, FadeWidth, DistanceToBoundary);
+    
+    float ColorAlpha =
+        saturate(TextureColor.a * TintOpacity.a)
+        * DepthFade;
     
     // 알파가 0이면 픽셀 제거
     if (ColorAlpha < 0.0001f)

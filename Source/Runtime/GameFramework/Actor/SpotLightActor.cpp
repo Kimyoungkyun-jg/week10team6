@@ -18,4 +18,5 @@ ASpotLightActor::ASpotLightActor()
     ArrowComponent->SetHiddenInDetails(true);
     ArrowComponent->SetCastShadow(false);
     ArrowComponent->SetReceiveShadow(false);
+	ArrowComponent->SetReceiveDecal(false);
 }

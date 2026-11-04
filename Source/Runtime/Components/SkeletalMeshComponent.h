@@ -34,6 +34,7 @@ public:
 
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
 	FVertexBuffer* GetSkinnedVertexBuffer() const { return SkinnedVertexBuffer.get(); }
+	const TArray<FVertex>& GetSkinnedVertices() const { return SkinnedVertices; }
 
 	virtual bool LineTraceComponent(const FRay& WorldRay, FHitResult& OutHit) override;
 	virtual bool LineTraceComponentLocal(const FRay& LocalRay, float& OutT) override;

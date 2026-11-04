@@ -8,6 +8,9 @@
 #include "GameFramework/Actor/DirectionalLightActor.h"
 #include "Render/SkeletalMesh.h"
 #include "Render/SkyboxRenderer.h"
+#include "Render/RenderCommand.h"
+#include "Asset/FbxImporter/SkeletalMeshBake.h"
+#include "Core/EngineLog.h"
 #include "Collision/Ray.h"
 #include "UObject/UObjectGlobals.h"
 #include <imgui_internal.h>
@@ -151,6 +154,10 @@ void FSkeletalMeshViewerPanel::Tick(float DeltaTime)
 {
 	for (TUniquePtr<FSkeletalMeshViewer>& Viewer : Viewers)
 	{
+		if (Viewer->SaveNotificationTimer > 0.0f)
+		{
+			Viewer->SaveNotificationTimer -= DeltaTime;
+		}
 		if (Viewer->ViewSize.x >= 1.0f && Viewer->ViewSize.y >= 1.0f)
 			Viewer->Client.Resize(static_cast<uint32>(Viewer->ViewSize.x), static_cast<uint32>(Viewer->ViewSize.y));
 	}
@@ -333,6 +340,22 @@ void FSkeletalMeshViewerPanel::DrawBoneDetails(FSkeletalMeshViewer& Viewer)
 		}
 	}
 
+	ImGui::SameLine();
+	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.45f, 0.22f, 1.0f));
+	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.58f, 0.28f, 1.0f));
+	ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.35f, 0.16f, 1.0f));
+	if (ImGui::Button("Save Pose"))
+	{
+		SaveViewerPose(Viewer);
+	}
+	ImGui::PopStyleColor(3);
+
+	if (Viewer.SaveNotificationTimer > 0.0f)
+	{
+		ImGui::SameLine();
+		ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "Saved!");
+	}
+
 	if (Viewer.SelectedBone < 0)
 	{
 		ImGui::Spacing();
@@ -393,6 +416,87 @@ void FSkeletalMeshViewerPanel::DrawBoneDetails(FSkeletalMeshViewer& Viewer)
 		ImGui::TextDisabled("Location: (%.2f, %.2f, %.2f)", GLoc.X, GLoc.Y, GLoc.Z);
 		ImGui::TextDisabled("Rotation: (%.1f, %.1f, %.1f)", GRot.Roll, GRot.Pitch, GRot.Yaw);
 	}
+}
+
+void FSkeletalMeshViewerPanel::SaveViewerPose(FSkeletalMeshViewer& Viewer)
+{
+	if (!Viewer.MeshComponent || !Viewer.MeshComponent->GetSkeletalMesh())
+	{
+		return;
+	}
+
+	USkeletalMesh* Mesh = Viewer.MeshComponent->GetSkeletalMesh();
+	FSkeletalMeshData& MeshData = Mesh->MeshData;
+
+	const TArray<FMatrix>& LocalTransforms = Viewer.MeshComponent->GetBoneTransforms();
+	const TArray<FMatrix>& GlobalTransforms = Viewer.MeshComponent->GetGlobalBoneTransforms();
+
+	const int32 BoneCount = MeshData.Bones.Num();
+	if (LocalTransforms.Num() != BoneCount || GlobalTransforms.Num() != BoneCount)
+	{
+		return;
+	}
+
+	// 1. 본의 바인드 포즈를 현재 편집된 트랜스폼으로 갱신
+	for (int32 i = 0; i < BoneCount; ++i)
+	{
+		MeshData.Bones[i].LocalBindPose = LocalTransforms[i];
+		MeshData.Bones[i].GlobalBindPose = GlobalTransforms[i];
+		MeshData.Bones[i].InverseBindPose = GlobalTransforms[i].Inverse();
+	}
+
+	// 2. 현재 스키닝된 정점 데이터를 기본 정점에 베이킹
+	Viewer.MeshComponent->PerformCPUSkinning();
+	const TArray<FVertex>& CurrentSkinned = Viewer.MeshComponent->GetSkinnedVertices();
+
+	if (CurrentSkinned.Num() == MeshData.SkinnedVertices.Num() && !CurrentSkinned.IsEmpty())
+	{
+		FVector BoundsMin(FLT_MAX, FLT_MAX, FLT_MAX);
+		FVector BoundsMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+
+		const int32 VertexCount = CurrentSkinned.Num();
+		for (int32 v = 0; v < VertexCount; ++v)
+		{
+			const FVertex& SkinnedV = CurrentSkinned[v];
+			FSkeletalVertex& MeshV = MeshData.SkinnedVertices[v];
+
+			MeshV.Position = SkinnedV.Position;
+			MeshV.Normal = SkinnedV.Normal;
+			MeshV.Tangent = SkinnedV.Tangent;
+
+			BoundsMin.X = std::min(BoundsMin.X, SkinnedV.Position.X);
+			BoundsMin.Y = std::min(BoundsMin.Y, SkinnedV.Position.Y);
+			BoundsMin.Z = std::min(BoundsMin.Z, SkinnedV.Position.Z);
+
+			BoundsMax.X = std::max(BoundsMax.X, SkinnedV.Position.X);
+			BoundsMax.Y = std::max(BoundsMax.Y, SkinnedV.Position.Y);
+			BoundsMax.Z = std::max(BoundsMax.Z, SkinnedV.Position.Z);
+		}
+
+		MeshData.AABB = FBox{ BoundsMin, BoundsMax };
+
+		// GPU 렌더링용 Static VertexBuffer 갱신
+		uint32 VbSize = static_cast<uint32>(sizeof(FSkeletalVertex) * VertexCount);
+		Mesh->VertexBuffer = RenderCommand::CreateStaticVertexBuffer(
+			MeshData.SkinnedVertices.GetData(), VbSize, sizeof(FSkeletalVertex));
+		Mesh->RebuildRenderData();
+	}
+
+	// 3. .fbx.bin 바이너리 캐시 파일로 영구 저장
+	const FString BinPath = Viewer.Path + ".bin";
+	FSkeletalMeshBake::WriteBaked(BinPath, MeshData);
+
+	// 4. 컴포넌트 내부 바인드 포즈 상태 재동기화
+	Viewer.MeshComponent->InitBoneTransforms();
+
+	// 5. 기즈모 타겟 재동기화
+	if (Viewer.SelectedBone >= 0)
+	{
+		SelectBone(Viewer, Viewer.SelectedBone);
+	}
+
+	Viewer.SaveNotificationTimer = 3.0f;
+	HTR_LOG(Info, "[Viewer] Successfully saved new skeletal mesh bind pose: {}", BinPath);
 }
 
 void FSkeletalMeshViewerPanel::DrawViewportToolbar(FSkeletalMeshViewer& Viewer)
@@ -529,99 +633,119 @@ void FSkeletalMeshViewerPanel::DrawViewportToolbar(FSkeletalMeshViewer& Viewer)
 	}
 	ImGui::PopStyleVar(3);
 
-	// ---- Camera Speed UI----
+	// ---- Camera Speed UI (Visible 버튼 바로 우측에 배치) ----
 	ImGui::SameLine(0.0f, 6.0f);
 
 	char SpeedStr[16];
 	snprintf(SpeedStr, sizeof(SpeedStr), "%.1f", Viewer.CameraSpeed);
 	const float CamTextWidth = ImGui::CalcTextSize(SpeedStr).x;
 	const float CamIconWidth = 18.0f;
-	const float CamSpacing = 5.0f;
-	const ImVec2 CamTotalSize(Padding.x * 2.0f + CamIconWidth + CamSpacing + CamTextWidth + CamSpacing + ChevronWidth, TotalSize.y);
+	const float CamSpacing = 6.0f;
+	const ImVec2 CamTotalSize(Padding.x * 2.0f + CamIconWidth + CamSpacing + CamTextWidth, TotalSize.y);
 
-	const ImVec2 CamCursorScreenPos = ImGui::GetCursorScreenPos();
-	const FString CamBtnId = "##CameraSpeedBtn_" + std::to_string(Viewer.Id);
-	ImGui::InvisibleButton(CamBtnId.c_str(), CamTotalSize);
-
-	const bool bCamHovered = ImGui::IsItemHovered();
-	const bool bCamActive = ImGui::IsItemActive();
-
-	// 드래그로 속도 조절
-	if (bCamActive && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 1.0f))
+	if (Viewer.bEditingCameraSpeed)
 	{
-		Viewer.bEditingCameraSpeed = true;
-		const float DragDelta = ImGui::GetIO().MouseDelta.x;
-		Viewer.CameraSpeed = std::clamp(Viewer.CameraSpeed + DragDelta * 0.05f, 0.1f, 20.0f);
-	}
-
-	if (bCamActive || (bCamHovered && !Viewer.bEditingCameraSpeed))
-	{
-		ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-	}
-
-	bool bOpenCamPopup = false;
-	if (ImGui::IsItemDeactivated())
-	{
-		if (!Viewer.bEditingCameraSpeed)
+		ImGui::SetNextItemWidth(std::max(CamTotalSize.x + 12.0f, 54.0f));
+		if (Viewer.bFocusCameraSpeedInput)
 		{
-			bOpenCamPopup = true;
+			ImGui::SetKeyboardFocusHere();
+			Viewer.bFocusCameraSpeedInput = false;
 		}
-		Viewer.bEditingCameraSpeed = false;
-	}
+		const FString InputId = "##CameraSpeedDirectInput_" + std::to_string(Viewer.Id);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, (TotalSize.y - ImGui::GetFontSize()) * 0.5f - 1.0f));
+		if (ImGui::InputFloat(InputId.c_str(), &Viewer.CameraSpeed, 0.0f, 0.0f, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll))
+		{
+			Viewer.bEditingCameraSpeed = false;
+		}
+		ImGui::PopStyleVar();
 
-	if (bCamHovered && !Viewer.bEditingCameraSpeed)
+		if (ImGui::IsItemDeactivated())
+		{
+			Viewer.bEditingCameraSpeed = false;
+		}
+		Viewer.CameraSpeed = std::clamp(Viewer.CameraSpeed, 0.1f, 50.0f);
+	}
+	else
 	{
-		ImGui::BeginTooltip();
-		ImGui::Text("Camera Speed: %.2f", Viewer.CameraSpeed);
-		ImGui::TextDisabled("Click & drag left/right to adjust");
-		ImGui::TextDisabled("Click to open slider popup");
-		ImGui::EndTooltip();
+		const ImVec2 CamCursorScreenPos = ImGui::GetCursorScreenPos();
+		const FString CamBtnId = "##CameraSpeedBtn_" + std::to_string(Viewer.Id);
+		ImGui::InvisibleButton(CamBtnId.c_str(), CamTotalSize);
+
+		const bool bCamHovered = ImGui::IsItemHovered();
+		const bool bCamActive = ImGui::IsItemActive();
+
+		// 더블 클릭 시 직접 텍스트 입력 모드로 전환
+		if (bCamHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+		{
+			Viewer.bEditingCameraSpeed = true;
+			Viewer.bFocusCameraSpeedInput = true;
+		}
+		// 클릭 & 좌우 드래그로 속도 실시간 조절
+		else if (bCamActive && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 1.0f))
+		{
+			const float DragDelta = ImGui::GetIO().MouseDelta.x;
+			Viewer.CameraSpeed = std::clamp(Viewer.CameraSpeed + DragDelta * 0.05f, 0.1f, 50.0f);
+		}
+
+		if (bCamHovered || bCamActive)
+		{
+			ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+			ImGui::BeginTooltip();
+			ImGui::Text("Camera Speed: %.1f", Viewer.CameraSpeed);
+			ImGui::TextDisabled("Drag left/right to adjust");
+			ImGui::TextDisabled("Double-click to type value");
+			ImGui::EndTooltip();
+		}
+
+		const ImU32 CamBgColor = bCamActive ? IM_COL32(35, 35, 35, 255) :
+		                         bCamHovered ? IM_COL32(70, 70, 70, 255) :
+		                         IM_COL32(50, 50, 50, 220);
+		const ImU32 CamBorderColor = bCamHovered ? IM_COL32(110, 110, 110, 220) : IM_COL32(65, 65, 65, 180);
+
+		const ImVec2 CamRectMax(CamCursorScreenPos.x + CamTotalSize.x, CamCursorScreenPos.y + CamTotalSize.y);
+		DrawList->AddRectFilled(CamCursorScreenPos, CamRectMax, CamBgColor, Rounding);
+		DrawList->AddRect(CamCursorScreenPos, CamRectMax, CamBorderColor, Rounding, 0, 1.0f);
+
+		// 카메라 아이콘 그리기
+		const ImVec2 CamCenter(CamCursorScreenPos.x + Padding.x + CamIconWidth * 0.5f, CamCursorScreenPos.y + TotalSize.y * 0.5f);
+		const ImU32 CamIconColor = bCamActive ? IM_COL32(255, 255, 255, 255) :
+		                           bCamHovered ? IM_COL32(240, 240, 240, 255) :
+		                           IM_COL32(200, 200, 200, 255);
+		const ImU32 CamLensColor = bCamActive ? IM_COL32(35, 35, 35, 255) :
+		                           bCamHovered ? IM_COL32(65, 65, 65, 255) :
+		                           IM_COL32(50, 50, 50, 255);
+
+		// 카메라 바디
+		DrawList->AddRectFilled(ImVec2(CamCenter.x - 7.5f, CamCenter.y - 4.5f), ImVec2(CamCenter.x + 7.5f, CamCenter.y + 5.5f), CamIconColor, 2.0f);
+		// 상단 뷰파인더 턱
+		DrawList->AddRectFilled(ImVec2(CamCenter.x - 4.0f, CamCenter.y - 7.0f), ImVec2(CamCenter.x + 0.5f, CamCenter.y - 4.5f), CamIconColor, 1.0f);
+		// 렌즈 원
+		DrawList->AddCircleFilled(ImVec2(CamCenter.x, CamCenter.y + 0.5f), 3.2f, CamLensColor);
+		DrawList->AddCircle(ImVec2(CamCenter.x, CamCenter.y + 0.5f), 3.2f, CamIconColor, 12, 1.0f);
+		DrawList->AddCircleFilled(ImVec2(CamCenter.x, CamCenter.y + 0.5f), 1.2f, CamIconColor);
+
+		// 속도 숫자 텍스트
+		const float TextStartX = CamCursorScreenPos.x + Padding.x + CamIconWidth + CamSpacing;
+		const float TextStartY = CamCursorScreenPos.y + (TotalSize.y - ImGui::GetTextLineHeight()) * 0.5f;
+		DrawList->AddText(ImVec2(TextStartX, TextStartY), IM_COL32(220, 220, 220, 255), SpeedStr);
 	}
 
-	const ImU32 CamBgColor = bCamActive ? IM_COL32(35, 35, 35, 255) :
-	                         bCamHovered ? IM_COL32(70, 70, 70, 255) :
-	                         IM_COL32(50, 50, 50, 220);
-	const ImU32 CamBorderColor = bCamHovered ? IM_COL32(110, 110, 110, 220) : IM_COL32(65, 65, 65, 180);
+	// ---- Toolbar Save Button ----
+	ImGui::SameLine(0.0f, 6.0f);
+	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.45f, 0.22f, 0.85f));
+	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.58f, 0.28f, 1.0f));
+	ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.35f, 0.16f, 1.0f));
+	if (ImGui::Button("Save##ToolbarSave", ImVec2(0.0f, TotalSize.y)))
+	{
+		SaveViewerPose(Viewer);
+	}
+	ImGui::PopStyleColor(3);
 
-	const ImVec2 CamRectMax(CamCursorScreenPos.x + CamTotalSize.x, CamCursorScreenPos.y + CamTotalSize.y);
-	DrawList->AddRectFilled(CamCursorScreenPos, CamRectMax, CamBgColor, Rounding);
-	DrawList->AddRect(CamCursorScreenPos, CamRectMax, CamBorderColor, Rounding, 0, 1.0f);
-
-	// 카메라 아이콘 그리기
-	const ImVec2 CamCenter(CamCursorScreenPos.x + Padding.x + CamIconWidth * 0.5f, CamCursorScreenPos.y + TotalSize.y * 0.5f);
-	const ImU32 CamIconColor = bCamActive ? IM_COL32(255, 255, 255, 255) :
-	                           bCamHovered ? IM_COL32(240, 240, 240, 255) :
-	                           IM_COL32(200, 200, 200, 255);
-	const ImU32 CamLensColor = bCamActive ? IM_COL32(35, 35, 35, 255) :
-	                           bCamHovered ? IM_COL32(65, 65, 65, 255) :
-	                           IM_COL32(50, 50, 50, 255);
-
-	// 카메라 바디
-	DrawList->AddRectFilled(ImVec2(CamCenter.x - 7.5f, CamCenter.y - 4.5f), ImVec2(CamCenter.x + 7.5f, CamCenter.y + 5.5f), CamIconColor, 2.0f);
-	// 상단 뷰파인더 턱
-	DrawList->AddRectFilled(ImVec2(CamCenter.x - 4.0f, CamCenter.y - 7.0f), ImVec2(CamCenter.x + 0.5f, CamCenter.y - 4.5f), CamIconColor, 1.0f);
-	// 렌즈 원
-	DrawList->AddCircleFilled(ImVec2(CamCenter.x, CamCenter.y + 0.5f), 3.2f, CamLensColor);
-	DrawList->AddCircle(ImVec2(CamCenter.x, CamCenter.y + 0.5f), 3.2f, CamIconColor, 12, 1.0f);
-	DrawList->AddCircleFilled(ImVec2(CamCenter.x, CamCenter.y + 0.5f), 1.2f, CamIconColor);
-
-	// 속도 숫자 텍스트
-	const float TextStartX = CamCursorScreenPos.x + Padding.x + CamIconWidth + CamSpacing;
-	const float TextStartY = CamCursorScreenPos.y + (TotalSize.y - ImGui::GetTextLineHeight()) * 0.5f;
-	DrawList->AddText(ImVec2(TextStartX, TextStartY), IM_COL32(220, 220, 220, 255), SpeedStr);
-
-	// 셰브론(화살표)
-	const float CamChevronX = TextStartX + CamTextWidth + CamSpacing;
-	const float CamChevronY = CamCursorScreenPos.y + (TotalSize.y - ChevronHeight) * 0.5f;
-	const ImU32 CamChevronColor = bCamActive ? IM_COL32(255, 255, 255, 255) :
-	                              bCamHovered ? IM_COL32(230, 230, 230, 255) :
-	                              IM_COL32(190, 190, 190, 255);
-	const ImVec2 CamChevronPts[3] = {
-		ImVec2(CamChevronX, CamChevronY),
-		ImVec2(CamChevronX + ChevronWidth * 0.5f, CamChevronY + ChevronHeight),
-		ImVec2(CamChevronX + ChevronWidth, CamChevronY)
-	};
-	DrawList->AddPolyline(CamChevronPts, 3, CamChevronColor, 0, 1.6f);
+	if (Viewer.SaveNotificationTimer > 0.0f)
+	{
+		ImGui::SameLine(0.0f, 6.0f);
+		ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "Saved!");
+	}
 }
 
 void FSkeletalMeshViewerPanel::DrawViewport(FSkeletalMeshViewer& Viewer)

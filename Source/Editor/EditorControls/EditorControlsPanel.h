@@ -18,6 +18,7 @@
 #include "GameFramework/Actor/ScoreboardManager.h"
 #include "GameFramework/Actor/SkeletalMeshActor.h"
 #include "GameFramework/Actor/DecalActor.h"
+#include "GameFramework/Actor/FakeSpotLightActor.h"
 
 class FViewportsPanel;
 
@@ -43,7 +44,7 @@ public:
 
 	int32 SelectedIndex = 0;
 
-	const char* Items[10] = {
+	const char* Items[11] = {
 		"StaticMesh", 
 		"Particle", 
 		"Text", 
@@ -53,7 +54,8 @@ public:
 		"ScoreboardManager", 
 		"SkeletalMesh", 
 		"LevelSequence",
-		"Decal"};
+		"Decal",
+		"FakeSpotLight"};
 
 	FGizmo* Gizmo = nullptr;
 	int32 GizmoSelectedIndex = 0;
@@ -74,6 +76,7 @@ public:
 		ASkeletalMeshActor::StaticClass(),
 		ALevelSequenceActor::StaticClass(),
 		ADecalActor::StaticClass(),
+		AFakeSpotLightActor::StaticClass()
 	};
 
 private:

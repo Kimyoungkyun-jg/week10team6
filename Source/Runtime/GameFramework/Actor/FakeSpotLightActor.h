@@ -1,8 +1,8 @@
 #pragma once
 
-#include "GameFramework/Actor.h";
-#include "Components/DecalComponent.h";
-#include "Components/BillboardComponent.h";
+#include "GameFramework/Actor.h"
+#include "Components/DecalComponent.h"
+#include "Components/BillboardComponent.h"
 
 #include "FakeSpotLightActor.generated.h"
 

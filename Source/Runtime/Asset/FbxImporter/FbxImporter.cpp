@@ -67,11 +67,11 @@ namespace
         }
     }
 
-    void ProcessPolygons(fbxsdk::FbxMesh* Mesh, FFbxInfo& Out, const fbxsdk::FbxAMatrix& MeshMatrix)
+    void ProcessPolygons(fbxsdk::FbxMesh* Mesh, FFbxInfo& Out, const fbxsdk::FbxAMatrix& MeshMatrix, int32 BaseIndex)
     {
         const fbxsdk::FbxAMatrix NormalMatrix = MeshMatrix.Inverse().Transpose();
         int PolygonCount = Mesh->GetPolygonCount();
-        Out.Polygons.Reserve(PolygonCount);
+        Out.Polygons.Reserve(Out.Polygons.Num() + PolygonCount);
 
         int PolygonVertexCounter = 0; // 전체 꼭짓점 순차 인덱스
 
@@ -131,7 +131,7 @@ namespace
 
                 // ControlPoint 인덱스
                 int cpIndex = Mesh->GetPolygonVertex(polyIdx, corner);
-                Corner.ControlPointIndex = cpIndex;
+                Corner.ControlPointIndex = BaseIndex + cpIndex;
                 Corner.PolygonVertexIndex = PolygonVertexCounter;
 
                 // Normal 추출
@@ -165,12 +165,12 @@ namespace
 
     void ProcessMesh(fbxsdk::FbxNode* Node, FFbxInfo& Out)
     {
+        fbxsdk::FbxNodeAttribute* Attribute = Node->GetNodeAttribute();
+
         // 재귀적으로 씬에서 eMesh 노드를 찾습니다.
-        if (Node->GetNodeAttribute() &&
-            Node->GetNodeAttribute()->GetAttributeType() == fbxsdk::FbxNodeAttribute::eMesh)
+        if (Attribute && Attribute->GetAttributeType() == fbxsdk::FbxNodeAttribute::eMesh && Node->GetMesh())
         {
             fbxsdk::FbxMesh* Mesh = Node->GetMesh();
-            if (!Mesh) return;
 
             fbxsdk::FbxAMatrix MeshMatrix;
             MeshMatrix.SetIdentity();
@@ -213,17 +213,18 @@ namespace
             const FMatrix MeshBindInverse = MeshBindGlobal.Inverse();
 
             // 원본 정점 위치 읽기
+            const int32 BaseIndex = Out.ControlPoints.Num(); // 해당 Mesh의 Control Point 시작 위치
             int ControlPointCount = Mesh->GetControlPointsCount();
             fbxsdk::FbxVector4* ControlPoints = Mesh->GetControlPoints();
 
-            Out.ControlPoints.SetNum(ControlPointCount);
-            Out.ControlPointWeights.SetNum(ControlPointCount);
+            Out.ControlPoints.SetNum(BaseIndex + ControlPointCount);
+            Out.ControlPointWeights.SetNum(BaseIndex + ControlPointCount);
 
             for (int i = 0; i < ControlPointCount; ++i)
             {
                 // FBX 좌표를 엔진 FVector로 복사
                 fbxsdk::FbxVector4 TransformedPos = MeshMatrix.MultT(ControlPoints[i]);
-                Out.ControlPoints[i] = FVector(
+                Out.ControlPoints[BaseIndex + i] = FVector(
                     static_cast<float>(TransformedPos[0]),
                     static_cast<float>(TransformedPos[1]),
                     static_cast<float>(TransformedPos[2])
@@ -276,7 +277,7 @@ namespace
 
                     for (int k = 0; k < IndexCount; ++k)
                     {
-                        int cpIndex = Indices[k];
+                        int cpIndex = BaseIndex + Indices[k];
                         float weight = static_cast<float>(Weights[k]);
                         Out.ControlPointWeights[cpIndex].AddBoneWeight(BoneIndex, weight);
                     }
@@ -286,7 +287,7 @@ namespace
             // 모든 정점의 가중치 합을 1.0으로 정규화
             for (int i = 0; i < ControlPointCount; ++i)
             {
-                Out.ControlPointWeights[i].NormalizeWeights();
+                Out.ControlPointWeights[BaseIndex + i].NormalizeWeights();
             }
 
             // 정점은 mesh 로컬 공간이므로 bone의 bind pose도 같은 공간으로 맞춘다.
@@ -354,8 +355,7 @@ namespace
             }
 
             // 폴리곤 데이터 읽기
-            ProcessPolygons(Mesh, Out, MeshMatrix);
-            return; // 일단 첫 번째 메쉬 처리 후 종료
+            ProcessPolygons(Mesh, Out, MeshMatrix, BaseIndex);
         }
 
         for (int i = 0; i < Node->GetChildCount(); ++i)
